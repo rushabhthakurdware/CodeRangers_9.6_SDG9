@@ -127,14 +127,21 @@ def estimate_repair_cost(
     cost = base_cost * scale
 
     # ---- State adjustment ----
-    state_multiplier = STATE_MULTIPLIERS.get(
-        state_code,
-        DEFAULT_STATE_MULTIPLIER
-    )
+    # state_multiplier = STATE_MULTIPLIERS.get(
+    #     state_code,
+    #     DEFAULT_STATE_MULTIPLIER
+    # )
+    if state_code in STATE_MULTIPLIERS:
+        state_multiplier = STATE_MULTIPLIERS[state_code]
+        # Optional: print(f"Applying {state_code} multiplier: {state_multiplier}")
+    else:
+        state_multiplier = DEFAULT_STATE_MULTIPLIER
+        # This captures any state not defined in your dictionary
+        # Optional: print(f"State {state_code} not found. Using default: {state_multiplier}")
     cost *= state_multiplier
 
     # ---- Low-confidence buffer (inspection / rework overhead) ----
-    if confidence_score < 0.6:
-        cost *= 1.15
+    confidence_score = max(0.0, min(confidence_score, 1.0))
+
 
     return int(round(cost))

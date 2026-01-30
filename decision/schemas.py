@@ -1,6 +1,8 @@
-# decision/schemas.py
-
 def validate_priority_input(data: dict):
+
+    if not isinstance(data, dict):
+        raise TypeError("Priority input must be a dictionary")
+
     required_fields = {
         "damage_severity": (0, 1),
         "location_criticality": (0, 1),

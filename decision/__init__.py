@@ -1,9 +1,13 @@
-# decision/__init__.py
-
 from .priority_engine import compute_priority
-from .optimizer import select_repairs
+from .cost_model import estimate_repair_cost
+from .optimizer import optimize_repairs
+from .explainability import explain_selection
+from .schemas import validate_priority_input
 
 __all__ = [
     "compute_priority",
-    "select_repairs"
+    "estimate_repair_cost",
+    "optimize_repairs",
+    "explain_selection",
+    "validate_priority_input"
 ]

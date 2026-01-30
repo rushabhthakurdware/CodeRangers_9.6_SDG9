@@ -1,12 +1,18 @@
 def explain_selection(selected, budget, spent):
+    if budget <= 0:
+        return "No budget was available for repairs."
+
     if not selected:
-        return "No repairs could be selected within the available budget."
+        return (
+            "No repairs were selected because all candidate repairs "
+            "exceeded the available budget or had insufficient impact."
+        )
 
-    explanation = (
-        f"Selected {len(selected)} repairs that deliver the highest "
-        f"risk reduction per rupee while staying within the ₹{budget:,} budget. "
-        f"This combination maximizes overall infrastructure impact without "
-        f"overcommitting funds."
+    utilization = spent / budget
+
+    return (
+        f"Selected {len(selected)} repairs that provide the highest "
+        f"infrastructure risk reduction per rupee within the ₹{budget:,} budget. "
+        f"₹{spent:,} was allocated ({utilization:.0%} utilization), prioritizing "
+        f"repairs with the greatest combined impact while respecting fiscal limits."
     )
-
-    return explanation
