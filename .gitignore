@@ -1,0 +1,38 @@
+# -------------------------------
+# Python
+# -------------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# -------------------------------
+# OS / Editor junk
+# -------------------------------
+.DS_Store
+.idea/
+.vscode/
+
+# -------------------------------
+# Logs & temp files
+# -------------------------------
+*.log
+*.tmp
+
+# -------------------------------
+# Test artifacts (keep tests!)
+# -------------------------------
+.pytest_cache/
+tests/__pycache__/
+tests
+
+# -------------------------------
+# Script artifacts (keep scripts!)
+# -------------------------------
+scripts/__pycache__/
+scripts
