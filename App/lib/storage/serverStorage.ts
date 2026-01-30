@@ -1,8 +1,20 @@
-export const loadServerIp = async () => {
-    console.log("Mock: Loading server IP (Returning default)");
-    return "192.168.1.1";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SERVER_IP_STORAGE_KEY = '@serverIpAddress';
+
+export const saveServerIp = async (ip: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(SERVER_IP_STORAGE_KEY, ip);
+    } catch (e) {
+        console.warn('Failed to save server IP to storage', e);
+    }
 };
 
-export const saveServerIp = async (ip: string) => {
-    console.log("Mock: Saving server IP:", ip);
+export const loadServerIp = async (): Promise<string | null> => {
+    try {
+        return await AsyncStorage.getItem(SERVER_IP_STORAGE_KEY);
+    } catch (e) {
+        console.warn('Failed to load server IP from storage', e);
+        return null;
+    }
 };

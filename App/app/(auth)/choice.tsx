@@ -11,6 +11,7 @@ import ChoiceButton from "@/components/common/ChoiceButton";
 import { useTheme } from "@/hooks/useTheme";
 import ThemeCycleButton from "@/components/theming/ThemeCycleButton";
 import { useStylePalette } from "@/constants/StylePalette";
+import { useServerConfig } from "@/context/ServerConfigContext";
 
 const { width, height } = Dimensions.get("screen");
 export default function ChoiceScreen() {
@@ -23,6 +24,7 @@ export default function ChoiceScreen() {
   const styles = useStylePalette();
   const cstyles = getStyles(effectiveTheme);
 
+  const { showModal } = useServerConfig(); // 2. Get the showModal function from the context
   return (
     <View style={styles.container}>
       <ThemeCycleButton></ThemeCycleButton>
@@ -40,6 +42,12 @@ export default function ChoiceScreen() {
         />
 
         <ChoiceButton title="Back" onPress={navigateBack} color="#6c757d" />
+
+        <ChoiceButton
+          title="Change Server IP"
+          onPress={showModal}
+          color="#6c757d"
+        />
       </View>
     </View>
   );

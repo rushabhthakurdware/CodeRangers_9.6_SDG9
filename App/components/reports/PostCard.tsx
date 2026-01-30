@@ -33,7 +33,7 @@ export default function PostCard({
     // `asChild` passes the press handling to the child component (`Pressable`).
     <Link
       href={{
-        pathname: `/posts/${post.id}`,
+        pathname: `../posts/${post.id}`,
         // ✅ Pass the entire post object as a stringified parameter
         params: { post: JSON.stringify(post), userName },
       }}

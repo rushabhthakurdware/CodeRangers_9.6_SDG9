@@ -1,13 +1,17 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet } from 'react-native';
+import React from "react";
+import { TouchableOpacity, Text, StyleSheet } from "react-native";
 
-interface ChoiceButtonProps {
+type ChoiceButtonProps = {
   title: string;
   onPress: () => void;
-  color: string;
-}
+  color?: string;
+};
 
-export default function ChoiceButton({ title, onPress, color }: ChoiceButtonProps) {
+export default function ChoiceButton({
+  title,
+  onPress,
+  color,
+}: ChoiceButtonProps) {
   return (
     <TouchableOpacity
       style={[styles.button, { backgroundColor: color }]}
@@ -20,16 +24,15 @@ export default function ChoiceButton({ title, onPress, color }: ChoiceButtonProp
 
 const styles = StyleSheet.create({
   button: {
-    width: '100%',
-    maxWidth: 300,
     padding: 15,
     borderRadius: 8,
-    alignItems: 'center',
-    marginVertical: 8,
+    width: "80%",
+    alignItems: "center",
+    marginTop: 20,
   },
   buttonText: {
-    color: '#ffffff',
+    color: "white",
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

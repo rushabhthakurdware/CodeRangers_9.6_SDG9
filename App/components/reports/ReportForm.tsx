@@ -14,10 +14,10 @@ type ReportFormProps = {
   description: string;
   setDescription: (text: string) => void;
   // --- ADD THESE ---
-  media: MediaItem[];
+  mediaList: MediaItem[];
   onPickMedia: () => void;
   onCaptureMedia: () => void;
-  location: { latitude: number; longitude: number; address?: string } | null;
+  location: { lat: number; lng: number } | null;
   isFetchingLocation: boolean;
   onFetchLocation: () => void;
 };
@@ -28,7 +28,7 @@ export default function ReportForm({
   description,
   setDescription,
   // --- ADD THESE ---
-  media,
+  mediaList,
   onPickMedia,
   onCaptureMedia,
   location,
@@ -74,7 +74,7 @@ export default function ReportForm({
         Add Photos and Videos
       </Text>
       <MediaPicker
-        mediaList={media}
+        mediaList={mediaList}
         onPickMedia={onPickMedia}
         onCaptureMedia={onCaptureMedia}
       />

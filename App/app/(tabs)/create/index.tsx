@@ -22,7 +22,7 @@ export default function CreateScreen() {
     setTitle,
     description,
     setDescription,
-    media,
+    mediaList,
     loading,
     pickMedia,
     captureMedia,
@@ -51,7 +51,7 @@ export default function CreateScreen() {
           description={description}
           setDescription={setDescription}
           // --- PASS MEDIA PROPS DOWN ---
-          media={media}
+          mediaList={mediaList}
           onPickMedia={pickMedia}
           onCaptureMedia={captureMedia}
           location={location}

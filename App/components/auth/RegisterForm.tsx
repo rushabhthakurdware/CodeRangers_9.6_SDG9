@@ -1,11 +1,22 @@
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Switch } from 'react-native';
-import { useStylePalette } from '@/constants/StylePalette';
-import { useTheme } from '@/hooks/useTheme';
+import React from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+} from "react-native";
+import { Checkbox } from "@futurejj/react-native-checkbox";
+import { useTheme } from "@/hooks/useTheme";
+import ThemeCycleButton from "../theming/ThemeCycleButton";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Palette } from "@/constants/Palette";
+import { useStylePalette } from "@/constants/StylePalette";
 
-interface RegisterFormProps {
+type RegisterFormProps = {
   username: string;
-  setUsername: (username: string) => void;
+  setUsername: (name: string) => void;
   email: string;
   setEmail: (email: string) => void;
   password: string;
@@ -14,9 +25,9 @@ interface RegisterFormProps {
   toggleAdmin: () => void;
   onRegister: () => void;
   onNavigateToLogin: () => void;
-  loading?: boolean;
-}
+};
 
+const { width, height } = Dimensions.get("screen");
 export default function RegisterForm({
   username,
   setUsername,
@@ -28,85 +39,66 @@ export default function RegisterForm({
   toggleAdmin,
   onRegister,
   onNavigateToLogin,
-  loading = false,
 }: RegisterFormProps) {
+  // 1. Get the effective theme ('light' or 'dark')
+  const { effectiveTheme, colors } = useTheme();
+  // 2. Pass the theme to the styles function
+  //const cstyles = getStyles(effectiveTheme);
   const styles = useStylePalette();
-  const { colors } = useTheme();
-
   return (
     <View style={styles.container}>
-      <View style={styles.container2}>
-        <Text style={styles.title}>Register</Text>
+      <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
+        <ThemeCycleButton></ThemeCycleButton>
 
-        <View style={styles.card}>
+        <View style={styles.container2}>
+          <Text style={styles.title}>Register 📝</Text>
           <TextInput
+            placeholder="Enter name"
+            placeholderTextColor={colors.PlaceholderText}
             style={styles.input}
-            placeholder="Username"
-            placeholderTextColor={colors.inputBorder}
             value={username}
             onChangeText={setUsername}
-            autoCapitalize="none"
           />
-
           <TextInput
+            placeholder="Enter email"
+            placeholderTextColor={colors.PlaceholderText}
             style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={colors.inputBorder}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
           />
-
           <TextInput
+            placeholder="Enter password"
+            placeholderTextColor={colors.PlaceholderText}
             style={styles.input}
-            placeholder="Password"
-            placeholderTextColor={colors.inputBorder}
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureTextEntry={true}
           />
+          {/*<View style={styles.checkboxContainer}>
+        <Checkbox
+          status={isAdmin ? "checked" : "unchecked"}
+          onPress={toggleAdmin}
+        />
+        <Text style={styles.label}>Admin? (For testing)</Text>
+      </View>*/}
 
-          <View style={localStyles.switchContainer}>
-            <Text style={[localStyles.switchLabel, { color: colors.text }]}>
-              Register as Admin
-            </Text>
-            <Switch value={isAdmin} onValueChange={toggleAdmin} />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.buttonCreateBg }]}
-            onPress={onRegister}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.buttonText}>Register</Text>
-            )}
+          <Text style={styles.subtitle2}></Text>
+          <TouchableOpacity style={styles.createButton} onPress={onRegister}>
+            <Text style={styles.buttonText}>Register</Text>
           </TouchableOpacity>
-
+          <Text style={styles.subtitle2}></Text>
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: '#6c757d' }]}
+            style={styles.loginButton}
             onPress={onNavigateToLogin}
           >
-            <Text style={styles.buttonText}>Go to Login</Text>
+            <Text style={styles.buttonText}>
+              Already have an account? Login
+            </Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </SafeAreaView>
     </View>
   );
 }
-
-const localStyles = StyleSheet.create({
-  switchContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-    paddingVertical: 10,
-  },
-  switchLabel: {
-    fontSize: 16,
-  },
-});

@@ -7,6 +7,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useStylePalette } from "@/constants/StylePalette";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LanguagePicker from "@/components/settings/LanguageSetting";
+import { useServerConfig } from "@/context/ServerConfigContext";
 import ServerConfigSetting from "@/components/settings/ChangeServerIp";
 
 export default function SettingsScreen() {
@@ -15,6 +16,8 @@ export default function SettingsScreen() {
   // 2. Pass the theme to the styles function
   const cstyles = getStyles(effectiveTheme);
   const styles = useStylePalette();
+
+  const { showModal } = useServerConfig(); // 2. Get the showModal function from the context
 
   return (
     <View style={[styles.tabcontainer, { flex: 1 }]}>
