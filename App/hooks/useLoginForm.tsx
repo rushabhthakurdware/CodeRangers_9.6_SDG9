@@ -15,11 +15,14 @@ export function useLoginForm() {
         setTimeout(() => {
             setLoading(false);
 
-            // Show success dialog
+            // Show success dialog then redirect
             Alert.alert(
                 'Success',
                 'Connected successfully!',
-                [{ text: 'OK' }]
+                [{
+                    text: 'OK',
+                    onPress: () => router.push('/(tabs)/home')
+                }]
             );
         }, 1000);
     };

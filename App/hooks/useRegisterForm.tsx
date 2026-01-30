@@ -21,13 +21,13 @@ export function useRegisterForm() {
         setTimeout(() => {
             setLoading(false);
 
-            // Show success dialog
+            // Show success dialog then redirect to tabs
             Alert.alert(
                 'Success',
                 'Account created successfully!',
                 [{
                     text: 'OK',
-                    onPress: () => router.push('/(auth)/login')
+                    onPress: () => router.push('/(tabs)/home')
                 }]
             );
         }, 1000);
