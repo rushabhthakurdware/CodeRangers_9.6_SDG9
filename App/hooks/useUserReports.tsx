@@ -7,9 +7,15 @@ export function useUserReports() {
         {
             id: '101',
             title: 'My First Report',
-            description: 'This is a test report I submitted',
-            media: [],
-            location: null,
+            description: 'This is a test report I submitted regarding the illegal dumping behind the mall.',
+            media: [
+                { url: 'https://picsum.photos/400/300?random=101', type: 'image', id: 'm101' }
+            ],
+            location: {
+                latitude: 40.7128,
+                longitude: -74.0060,
+                address: 'Mall Backside, City'
+            },
             createdAt: new Date().toISOString(),
             createdByName: 'Test User',
             status: 'pending',
@@ -17,9 +23,15 @@ export function useUserReports() {
         {
             id: '102',
             title: 'Another Issue',
-            description: 'Second report from my account',
-            media: [],
-            location: null,
+            description: 'Second report from my account - Water leakage on the sidewalk.',
+            media: [
+                { url: 'https://picsum.photos/400/300?random=102', type: 'image', id: 'm102' }
+            ],
+            location: {
+                latitude: 40.73061,
+                longitude: -73.935242,
+                address: 'Sidewalk, City'
+            },
             createdAt: new Date().toISOString(),
             createdByName: 'Test User',
             status: 'resolved',
