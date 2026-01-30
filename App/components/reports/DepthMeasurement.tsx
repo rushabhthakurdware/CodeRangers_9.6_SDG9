@@ -66,8 +66,9 @@ export default function DepthMeasurement({
         };
     }, [visible, sessionReady]);
 
-    const handleSessionCreate = useCallback(() => {
-        console.log('AR Session created successfully!');
+    const handleSessionCreate = useCallback((event: any) => {
+        console.log('AR Session callback triggered!', event);
+        console.log('Setting sessionReady to TRUE');
         setSessionReady(true);
         setInitializationTime(0);
     }, []);
@@ -80,6 +81,8 @@ export default function DepthMeasurement({
     };
 
     const handleTapPlane = useCallback((event: any) => {
+        console.log('sessionReady state:', sessionReady);
+
         if (!sessionReady) {
             Alert.alert('Not Ready', 'AR session is still initializing. Please wait...');
             return;
@@ -211,8 +214,8 @@ export default function DepthMeasurement({
                         }}
                     />
 
-                    {/* Initialization Overlay */}
-                    {!sessionReady && (
+                    {/* Initialization Overlay - Temporarily disabled for debugging */}
+                    {/* {!sessionReady && (
                         <View style={cstyles.overlay}>
                             <Text style={[styles.subtitle, { color: '#fff', textAlign: 'center', fontSize: 18 }]}>
                                 📐 Initializing AR...
@@ -224,7 +227,7 @@ export default function DepthMeasurement({
                                 {initializationTime}s elapsed
                             </Text>
                         </View>
-                    )}
+                    )} */}
 
                     {/* Crosshair for aiming */}
                     {sessionReady && (

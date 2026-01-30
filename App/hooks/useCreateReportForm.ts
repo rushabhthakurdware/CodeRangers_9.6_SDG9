@@ -6,6 +6,7 @@ import uuid from 'react-native-uuid';
 import { createReport } from '@/lib/api/reportService';
 import { LocationCoords, MediaItem } from '@/lib/types';
 import * as Location from 'expo-location';
+import { reverseGeocode } from '@/utils/geocoding';
 export function useCreateReportForm() {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
@@ -14,6 +15,7 @@ export function useCreateReportForm() {
 
     // 2. Add state for location
     const [location, setLocation] = useState<LocationCoords | null>(null);
+    const [locationAddress, setLocationAddress] = useState<string | null>(null);
     const [isFetchingLocation, setIsFetchingLocation] = useState(false);
 
     // 3. Add state for depth measurement
@@ -103,23 +105,58 @@ export function useCreateReportForm() {
         }
     };
 
+    // 4. Fetch location using expo-location
     const fetchLocation = async () => {
         setIsFetchingLocation(true);
         try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
+            const { status } = await Location.requestForegroundPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission Denied', 'Please enable location services to use this feature.');
+                Alert.alert('Permission denied', 'Allow location access to get your current location.');
+                setIsFetchingLocation(false);
                 return;
             }
+            const loc = await Location.getCurrentPositionAsync({});
+            const coords = {
+                lat: loc.coords.latitude,
+                lng: loc.coords.longitude,
+            };
+            setLocation(coords);
 
-            let locationData = await Location.getCurrentPositionAsync({});
-            setLocation({
-                lat: locationData.coords.latitude,
-                lng: locationData.coords.longitude,
-            });
+            // Fetch address for the location
+            try {
+                console.log('🔍 Fetching address for coordinates...');
+                const address = await reverseGeocode(coords.lat, coords.lng);
+                if (address) {
+                    const addressText = address.street ||
+                        (address.city && address.state ? `${address.city}, ${address.state}` : '') ||
+                        address.formattedAddress ||
+                        `${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}`;
+
+                    setLocationAddress(addressText);
+                    console.log('📍 Location Address:', addressText);
+
+                    // Append address to description text field
+                    setDescription((prevDesc) => {
+                        // Check if address is already in description to avoid duplicates
+                        if (prevDesc.includes(`[📍 ${addressText}]`)) {
+                            return prevDesc;
+                        }
+                        // Add address to description with some spacing
+                        const newDesc = prevDesc.trim()
+                            ? `${prevDesc}\n\n[📍 Location: ${addressText}]`
+                            : `[📍 Location: ${addressText}]`;
+                        return newDesc;
+                    });
+                } else {
+                    console.warn('⚠️ Could not fetch address from coordinates');
+                }
+            } catch (geocodeError) {
+                console.error('❌ Failed to fetch address:', geocodeError);
+                setLocationAddress(null);
+            }
         } catch (error) {
-            console.error("Error fetching location:", error);
-            Alert.alert("Error", "Could not fetch location.");
+            console.error(error);
+            Alert.alert('Error', 'Could not fetch location.');
         } finally {
             setIsFetchingLocation(false);
         }
@@ -144,31 +181,36 @@ export function useCreateReportForm() {
 
     const savePost = async () => {
         if (!title || !description || !location) {
-            let errorMessage = "Please fill all required fields.";
-            if (!location) {
-                errorMessage = "Please fetch your location before submitting the report.";
-            }
-            Alert.alert("Incomplete Report", errorMessage);
-
+            Alert.alert("Missing Information", "Please provide title, description, and location.");
             return false;
         }
+
         setLoading(true);
         try {
-            const response = await createReport(
+            console.log("Submitting report:", {
                 title,
                 description,
-                // Replace with actual coordinates from a location picker
-                //{ lat: 21.0077, lng: 75.5626, address: "Nagpur" }, // Example: Jalgaon coordinates
                 location,
-                // ✅ Use a valid category from your schema's enum list
+                locationAddress,
+                depth
+            });
+
+            const response = await createReport(
+                title,
+                description, // Use description as-is (address already appended)
+                location,
                 "pothole",
-                mediaList // Pass the first media item
+                mediaList
             );
+
             if (response) {
                 Alert.alert("Success", "Report submitted successfully!");
                 setTitle("");
                 setDescription("");
                 setMediaList([]);
+                setLocation(null);
+                setLocationAddress(null);
+                setDepth(null);
                 return true;
             } else {
                 Alert.alert("Error", "Failed to submit report.");
@@ -194,6 +236,7 @@ export function useCreateReportForm() {
         captureMedia,
         savePost,
         location,
+        locationAddress,
         isFetchingLocation,
         fetchLocation,
         depth,

@@ -42,6 +42,11 @@ export default function PostDetails({
             <Text style={cstyles.creator}>
               By: {userName ? userName : post.createdBy.name}
             </Text>
+            {post.locationAddress && (
+              <Text style={cstyles.address}>
+                📍 {post.locationAddress}
+              </Text>
+            )}
             <Text style={cstyles.date}>
               {new Date(post.createdAt).toLocaleDateString()}
             </Text>
@@ -114,6 +119,12 @@ const getStyles = (theme: "light" | "dark") => {
       fontSize: 14,
       color: isDark ? "#A0A0A0" : "#777777",
       marginBottom: 5,
+    },
+    address: {
+      fontSize: 14,
+      color: isDark ? "#88C0D0" : "#5E81AC",
+      marginBottom: 5,
+      fontStyle: "italic",
     },
     description: {
       fontSize: 16,

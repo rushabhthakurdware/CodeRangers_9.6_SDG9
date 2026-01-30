@@ -11,6 +11,9 @@ export default {
     "scheme": "civicapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "extra": {
+      "googleMapsApiKey": process.env.GOOGLE_MAPS_API_KEY
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -29,10 +32,10 @@ export default {
       },
       "package": "com.anonymous.CivicSync",
       "config": {
-    "googleMaps": {
-      "apiKey": process.env.GOOGLE_MAPS_API_KEY
-    }
-  }
+        "googleMaps": {
+          "apiKey": process.env.GOOGLE_MAPS_API_KEY
+        }
+      }
     },
     "web": {
       "bundler": "metro",
