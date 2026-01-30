@@ -35,20 +35,44 @@ export default function DepthMeasurement({
     const [depth, setDepth] = useState<number | null>(null);
     const [widthValue, setWidthValue] = useState<number | null>(null);
 
+    // Refs to avoid stale closures in callbacks
+    const sessionReadyRef = useRef(false);
+    const modeRef = useRef<MeasurementMode>('depth');
+    const referencePointRef = useRef<{ x: number, y: number, z: number } | null>(null);
+    const measurementPointRef = useRef<{ x: number, y: number, z: number } | null>(null);
+
     const [referencePoint, setReferencePoint] = useState<{ x: number, y: number, z: number } | null>(null);
     const [measurementPoint, setMeasurementPoint] = useState<{ x: number, y: number, z: number } | null>(null);
+
     const [sessionReady, setSessionReady] = useState(false);
     const [initializationTime, setInitializationTime] = useState(0);
+
+    // Sync refs with state
+    useEffect(() => {
+        sessionReadyRef.current = sessionReady;
+    }, [sessionReady]);
+
+    useEffect(() => {
+        modeRef.current = mode;
+    }, [mode]);
 
     // Reset states when modal closes
     useEffect(() => {
         if (!visible) {
             setSessionReady(false);
+            sessionReadyRef.current = false;
             setDepth(null);
             setWidthValue(null);
+
             setReferencePoint(null);
+            referencePointRef.current = null;
+
             setMeasurementPoint(null);
+            measurementPointRef.current = null;
+
             setMode('depth');
+            modeRef.current = 'depth';
+
             setInitializationTime(0);
         }
     }, [visible]);
@@ -70,20 +94,15 @@ export default function DepthMeasurement({
         console.log('AR Session callback triggered!', event);
         console.log('Setting sessionReady to TRUE');
         setSessionReady(true);
+        sessionReadyRef.current = true;
         setInitializationTime(0);
     }, []);
 
-    const calculate3DDistance = (p1: { x: number, y: number, z: number }, p2: { x: number, y: number, z: number }) => {
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const dz = p2.z - p1.z;
-        return Math.sqrt(dx * dx + dy * dy + dz * dz) * 100; // Convert to cm
-    };
-
     const handleTapPlane = useCallback((event: any) => {
-        console.log('sessionReady state:', sessionReady);
+        const isReady = sessionReadyRef.current;
+        console.log('sessionReady state:', isReady);
 
-        if (!sessionReady) {
+        if (!isReady) {
             Alert.alert('Not Ready', 'AR session is still initializing. Please wait...');
             return;
         }
@@ -99,27 +118,34 @@ export default function DepthMeasurement({
 
         console.log('Hit point:', hitPoint);
 
-        if (!referencePoint) {
+        const currentRefPoint = referencePointRef.current;
+        const currentMeasurePoint = measurementPointRef.current;
+        const currentMode = modeRef.current;
+
+        if (!currentRefPoint) {
             // First tap: set reference point
             setReferencePoint(hitPoint);
-            const instruction = mode === 'depth'
+            referencePointRef.current = hitPoint;
+
+            const instruction = currentMode === 'depth'
                 ? 'Now tap the BOTTOM of the pothole'
                 : 'Now tap the OTHER EDGE of the pothole';
             Alert.alert('Reference Set', instruction);
-        } else if (!measurementPoint) {
+        } else if (!currentMeasurePoint) {
             // Second tap: set measurement point and calculate
             setMeasurementPoint(hitPoint);
+            measurementPointRef.current = hitPoint;
 
-            if (mode === 'depth') {
+            if (currentMode === 'depth') {
                 // Calculate vertical distance (depth)
-                const calculatedDepth = Math.abs(referencePoint.y - hitPoint.y) * 100; // Convert to cm
+                const calculatedDepth = Math.abs(currentRefPoint.y - hitPoint.y) * 100; // Convert to cm
                 setDepth(calculatedDepth);
                 console.log(`Depth measured: ${calculatedDepth.toFixed(1)} cm`);
                 Alert.alert('Depth Measured', `${calculatedDepth.toFixed(1)} cm`);
             } else {
                 // Calculate horizontal distance (width)
-                const dx = referencePoint.x - hitPoint.x;
-                const dz = referencePoint.z - hitPoint.z;
+                const dx = currentRefPoint.x - hitPoint.x;
+                const dz = currentRefPoint.z - hitPoint.z;
                 const calculatedWidth = Math.sqrt(dx * dx + dz * dz) * 100; // Horizontal distance in cm
                 setWidthValue(calculatedWidth);
                 console.log(`Width measured: ${calculatedWidth.toFixed(1)} cm`);
@@ -129,16 +155,22 @@ export default function DepthMeasurement({
             // Reset for next measurement
             setTimeout(() => {
                 setReferencePoint(null);
+                referencePointRef.current = null;
                 setMeasurementPoint(null);
+                measurementPointRef.current = null;
             }, 500);
         }
-    }, [referencePoint, measurementPoint, sessionReady, mode]);
+    }, []);
 
     const handleReset = useCallback(() => {
         setDepth(null);
         setWidthValue(null);
+
         setReferencePoint(null);
+        referencePointRef.current = null;
+
         setMeasurementPoint(null);
+        measurementPointRef.current = null;
     }, []);
 
     const toggleMode = useCallback(() => {
@@ -157,6 +189,7 @@ export default function DepthMeasurement({
     const handleCancel = useCallback(() => {
         handleReset();
         setSessionReady(false);
+        sessionReadyRef.current = false;
         onClose();
     }, [onClose, handleReset]);
 
