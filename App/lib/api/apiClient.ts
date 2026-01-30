@@ -10,7 +10,7 @@ const apiClient = axios.create({
 // 2. Create and export a function to update the baseURL at runtime.
 export const setApiBaseUrl = (ipAddress: string) => {
     // Make sure to include the port and /api path
-    apiClient.defaults.baseURL = `http://192.168.0.99:5000/api`;
+    apiClient.defaults.baseURL = `https://credent-yi-preciously.ngrok-free.dev/api`;
     console.log(`API base URL set to: ${apiClient.defaults.baseURL}`);
 };
 

@@ -18,12 +18,14 @@ type MediaPickerProps = {
   mediaList: MediaItem[];
   onPickMedia: () => void;
   onCaptureMedia: () => void;
+  onMeasureDepth?: () => void;
 };
 
 export default function MediaPicker({
   mediaList,
   onPickMedia,
   onCaptureMedia,
+  onMeasureDepth,
 }: MediaPickerProps) {
   // 1. Get the effective theme ('light' or 'dark')
   const { effectiveTheme, colors } = useTheme();
@@ -37,14 +39,14 @@ export default function MediaPicker({
           style={[
             styles.simpleButton,
             {
-              width: width * 0.4,
+              width: width * 0.28,
               backgroundColor: colors.mediaAddButton,
               paddingVertical: 10,
             },
           ]}
           onPress={onPickMedia}
         >
-          <Text style={[styles.buttonText, { fontSize: 14 }]}>
+          <Text style={[styles.buttonText, { fontSize: 12 }]}>
             Pick from Gallery
           </Text>
         </TouchableOpacity>
@@ -52,17 +54,34 @@ export default function MediaPicker({
           style={[
             styles.simpleButton,
             {
-              width: width * 0.4,
+              width: width * 0.28,
               backgroundColor: colors.mediaAddButton,
               paddingVertical: 10,
             },
           ]}
           onPress={onCaptureMedia}
         >
-          <Text style={[styles.buttonText, { fontSize: 14 }]}>
+          <Text style={[styles.buttonText, { fontSize: 12 }]}>
             Capture Photo
           </Text>
         </TouchableOpacity>
+        {onMeasureDepth && (
+          <TouchableOpacity
+            style={[
+              styles.simpleButton,
+              {
+                width: width * 0.28,
+                backgroundColor: colors.mediaAddButton,
+                paddingVertical: 10,
+              },
+            ]}
+            onPress={onMeasureDepth}
+          >
+            <Text style={[styles.buttonText, { fontSize: 12 }]}>
+              Measure Depth
+            </Text>
+          </TouchableOpacity>
+        )}
         {/* You can add a separate function for the camera if needed */}
       </View>
 

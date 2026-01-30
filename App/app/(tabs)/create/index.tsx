@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import ThemeCycleButton from "@/components/theming/ThemeCycleButton";
 import { useTheme } from "@/hooks/useTheme";
 import { useStylePalette } from "@/constants/StylePalette";
+import DepthMeasurement from "@/components/reports/DepthMeasurement";
 
 const { width, height } = Dimensions.get("window");
 
@@ -30,6 +31,11 @@ export default function CreateScreen() {
     isFetchingLocation,
     fetchLocation,
     savePost,
+    depth,
+    isDepthModalVisible,
+    openDepthMeasurement,
+    closeDepthMeasurement,
+    handleDepthMeasurement,
   } = useCreateReportForm();
 
   const { colors } = useTheme();
@@ -54,9 +60,17 @@ export default function CreateScreen() {
           mediaList={mediaList}
           onPickMedia={pickMedia}
           onCaptureMedia={captureMedia}
+          onMeasureDepth={openDepthMeasurement}
           location={location}
           isFetchingLocation={isFetchingLocation}
           onFetchLocation={fetchLocation}
+        />
+
+        {/* Depth Measurement Modal */}
+        <DepthMeasurement
+          visible={isDepthModalVisible}
+          onClose={closeDepthMeasurement}
+          onMeasurementComplete={handleDepthMeasurement}
         />
 
         {/* 3. The MediaPicker and separators are REMOVED from here */}

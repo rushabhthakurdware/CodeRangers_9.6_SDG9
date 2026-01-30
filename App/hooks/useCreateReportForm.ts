@@ -15,6 +15,10 @@ export function useCreateReportForm() {
     // 2. Add state for location
     const [location, setLocation] = useState<LocationCoords | null>(null);
     const [isFetchingLocation, setIsFetchingLocation] = useState(false);
+
+    // 3. Add state for depth measurement
+    const [depth, setDepth] = useState<number | null>(null);
+    const [isDepthModalVisible, setIsDepthModalVisible] = useState(false);
     const pickMedia = async () => {
         /*
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -121,6 +125,23 @@ export function useCreateReportForm() {
         }
     };
 
+    const openDepthMeasurement = () => {
+        setIsDepthModalVisible(true);
+    };
+
+    const closeDepthMeasurement = () => {
+        setIsDepthModalVisible(false);
+    };
+
+    const handleDepthMeasurement = (measuredDepth: number, measuredWidth?: number) => {
+        setDepth(measuredDepth);
+        console.log('Measured depth:', measuredDepth);
+        if (measuredWidth) {
+            console.log('Measured width:', measuredWidth);
+        }
+    };
+
+
     const savePost = async () => {
         if (!title || !description || !location) {
             let errorMessage = "Please fill all required fields.";
@@ -175,5 +196,10 @@ export function useCreateReportForm() {
         location,
         isFetchingLocation,
         fetchLocation,
+        depth,
+        isDepthModalVisible,
+        openDepthMeasurement,
+        closeDepthMeasurement,
+        handleDepthMeasurement,
     };
 }
