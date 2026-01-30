@@ -11,6 +11,7 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 import { useStylePalette } from '@/constants/StylePalette';
 import { SceneformView } from '@sceneview/react-native-sceneform';
+import AutoPotholeDetection from './AutoPotholeDetection';
 
 const { width, height } = Dimensions.get('window');
 
@@ -31,6 +32,7 @@ export default function DepthMeasurement({
     const styles = useStylePalette();
     const sceneformRef = useRef<any>(null);
 
+    const [detectionMode, setDetectionMode] = useState<'manual' | 'auto'>('manual');
     const [mode, setMode] = useState<MeasurementMode>('depth');
     const [depth, setDepth] = useState<number | null>(null);
     const [widthValue, setWidthValue] = useState<number | null>(null);
@@ -216,6 +218,18 @@ export default function DepthMeasurement({
         return 'Calculating...';
     };
 
+
+    // If auto-detection mode is selected, show AutoPotholeDetection component
+    if (detectionMode === 'auto') {
+        return (
+            <AutoPotholeDetection
+                visible={visible}
+                onClose={onClose}
+                onMeasurementComplete={onMeasurementComplete}
+            />
+        );
+    }
+
     return (
         <Modal
             visible={visible}
@@ -226,6 +240,14 @@ export default function DepthMeasurement({
             <View style={[cstyles.container, { backgroundColor: colors.background }]}>
                 {/* Header */}
                 <View style={cstyles.header}>
+                    <TouchableOpacity
+                        onPress={() => setDetectionMode(detectionMode === 'manual' ? 'auto' : 'manual')}
+                        style={[cstyles.modeToggleButton, { borderColor: colors.mediaAddButton }]}
+                    >
+                        <Text style={[styles.buttonText, { fontSize: 14 }]}>
+                            {detectionMode === 'manual' ? '🤖 Auto' : '👆 Manual'}
+                        </Text>
+                    </TouchableOpacity>
                     <Text style={[styles.title, { fontSize: 20 }]}>
                         Measure {mode === 'depth' ? 'Depth' : 'Width'}
                     </Text>
@@ -361,6 +383,12 @@ const cstyles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingTop: 50,
         paddingBottom: 20,
+    },
+    modeToggleButton: {
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 2,
     },
     closeButton: {
         padding: 5,
