@@ -73,6 +73,45 @@ export default function TabsLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="create/index"
+        options={{
+          title: "Create",
+          tabBarIcon: ({ focused }) => (
+            <Entypo
+              name="circle-with-plus"
+              size={24}
+              color={focused ? colors.tabIconActive : colors.tabIconInactive}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile/index"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ focused }) => (
+            <FontAwesome
+              name="user-circle"
+              size={24}
+              color={focused ? colors.tabIconActive : colors.tabIconInactive}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings/index"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ focused }) => (
+            <FontAwesome6
+              name="gear"
+              size={24}
+              color={focused ? colors.tabIconActive : colors.tabIconInactive}
+            />
+          ),
+        }}
+      />
       {/*
         <Tabs.Screen
           name="../posts/[id]" // Assumes you have a file named `app/(tabs)/extra-screen.tsx`
