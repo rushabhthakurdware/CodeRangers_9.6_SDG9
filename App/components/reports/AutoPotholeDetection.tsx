@@ -21,7 +21,7 @@ const { width, height } = Dimensions.get('window');
 type AutoPotholeDetectionProps = {
     visible: boolean;
     onClose: () => void;
-    onMeasurementComplete: (depth: number, width?: number, area?: number) => void;
+    onMeasurementComplete: (depth?: number, width?: number, area?: number, aiDescription?: string) => void;
 };
 
 // Workflow States
@@ -47,6 +47,7 @@ export default function AutoPotholeDetection({
     const [pwidth, setPWidth] = useState<string>('');
     const [area, setArea] = useState<string>('');
     const [severity, setSeverity] = useState<string>(''); // Added Severity State
+    const [description, setDescription] = useState<string>(''); // Added Description State
     const [confidence, setConfidence] = useState<number>(0);
 
     // Initial Permission Check
@@ -73,6 +74,7 @@ export default function AutoPotholeDetection({
             setPWidth('');
             setArea('');
             setSeverity('');
+            setDescription('');
         }
     }, [visible]);
 
@@ -101,10 +103,20 @@ export default function AutoPotholeDetection({
             const result = await analyzeImageWithGemini(capturedPhotoPath);
 
             if (result) {
-                setDepth(result.depth?.toString() || (result.height?.toString() || '0'));
-                setPWidth(result.width?.toString() || '0');
-                setArea(result.area?.toString() || '0');
-                setSeverity('Moderate'); // Default or inferred from Gemini
+                console.log('🤖 AutoPotholeDetection Received Result:', JSON.stringify(result, null, 2));
+
+                const d = result.depth !== undefined ? result.depth.toString() : (result.height !== undefined ? result.height.toString() : '0');
+                const w = result.width !== undefined ? result.width.toString() : '0';
+                const a = result.area !== undefined ? result.area.toString() : '0';
+                const desc = result.description || '';
+
+                console.log(`Setting State -> Depth: ${d}, Width: ${w}, Area: ${a}, Desc: ${desc}`);
+
+                setDepth(d);
+                setPWidth(w);
+                setArea(a);
+                setSeverity('Moderate');
+                setDescription(desc);
                 setConfidence(result.confidence || 0);
                 setWorkflowState('results');
             } else {
@@ -118,11 +130,21 @@ export default function AutoPotholeDetection({
     };
 
     // 3. Save Data
+    // 3. Save Data
     const handleSave = () => {
-        const d = parseFloat(depth) || 0;
-        const w = parseFloat(pwidth) || 0;
-        const a = parseFloat(area) || 0;
-        onMeasurementComplete(d, w, a); // Severity can be added to callback if parent supports it
+        console.log('📝 handleSave triggered in AutoPotholeDetection');
+        console.log('Raw State:', { depth, pwidth, area, description });
+
+        const d = parseFloat(depth) || undefined; // Use undefined for 0/empty to let parent decide? Or 0?
+        // Actually parent handles 0 vs undefined. 
+        // If user clears the box (empty string), parseFloat is NaN -> undefined logic or 0
+        const parsedDepth = depth ? parseFloat(depth) : undefined;
+        const parsedWidth = pwidth ? parseFloat(pwidth) : undefined;
+        const parsedArea = area ? parseFloat(area) : undefined;
+
+        console.log('Parsed Values for callback:', { parsedDepth, parsedWidth, parsedArea });
+
+        onMeasurementComplete(parsedDepth, parsedWidth, parsedArea, description);
         onClose();
     };
 
@@ -246,6 +268,8 @@ export default function AutoPotholeDetection({
                                         value={depth}
                                         onChangeText={setDepth}
                                         keyboardType="numeric"
+                                        placeholder="5.4"
+                                        placeholderTextColor="#666"
                                         style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', borderBottomColor: '#555', borderBottomWidth: 1 }}
                                     />
                                 </View>
@@ -255,6 +279,8 @@ export default function AutoPotholeDetection({
                                         value={pwidth}
                                         onChangeText={setPWidth}
                                         keyboardType="numeric"
+                                        placeholder="4.2"
+                                        placeholderTextColor="#666"
                                         style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', borderBottomColor: '#555', borderBottomWidth: 1 }}
                                     />
                                 </View>
@@ -264,6 +290,8 @@ export default function AutoPotholeDetection({
                                         value={area}
                                         onChangeText={setArea}
                                         keyboardType="numeric"
+                                        placeholder="23"
+                                        placeholderTextColor="#666"
                                         style={{ color: '#fff', fontSize: 18, fontWeight: 'bold', borderBottomColor: '#555', borderBottomWidth: 1 }}
                                     />
                                 </View>
@@ -275,6 +303,18 @@ export default function AutoPotholeDetection({
                                         placeholder="Normal"
                                         placeholderTextColor="#666"
                                         style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', borderBottomColor: '#555', borderBottomWidth: 1 }}
+                                    />
+                                </View>
+                                <View style={[cstyles.resultBox, { width: '100%', marginTop: 10 }]}>
+                                    <Text style={{ color: '#aaa', fontSize: 12 }}>AI Description</Text>
+                                    <TextInput
+                                        value={description}
+                                        onChangeText={setDescription}
+                                        multiline
+                                        numberOfLines={4}
+                                        placeholder="AI analysis text will appear here..."
+                                        placeholderTextColor="#666"
+                                        style={{ color: '#fff', fontSize: 14, minHeight: 88, textAlignVertical: 'top', borderBottomColor: '#555', borderBottomWidth: 1 }}
                                     />
                                 </View>
                             </View>

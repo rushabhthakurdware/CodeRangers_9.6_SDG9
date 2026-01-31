@@ -95,21 +95,36 @@ Return your response as JSON with fields: width, height, depth, area, confidence
         const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
         console.log('Gemini Text Response:', textResponse);
 
-        // Try to extract JSON from response
-        const jsonMatch = textResponse.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-            const measurements = JSON.parse(jsonMatch[0]);
-            return {
-                width: parseFloat(measurements.width) || undefined,
-                height: parseFloat(measurements.height) || parseFloat(measurements.depth) || undefined,
-                depth: parseFloat(measurements.depth) || undefined,
-                area: parseFloat(measurements.area) || undefined,
-                confidence: parseFloat(measurements.confidence) || 0.5,
-                description: measurements.description || 'AI detected measurements'
-            };
+        // CLEANUP: Remove Markdown formatting (```json ... ```)
+        const cleanedText = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+        console.log('Cleaned Text for Parsing:', cleanedText);
+
+        // Attempt 1: Parse the cleaned text directly
+        try {
+            // Find the JSON object boundaries
+            const firstBrace = cleanedText.indexOf('{');
+            const lastBrace = cleanedText.lastIndexOf('}');
+
+            if (firstBrace !== -1 && lastBrace !== -1) {
+                const jsonString = cleanedText.substring(firstBrace, lastBrace + 1);
+                const measurements = JSON.parse(jsonString);
+
+                return {
+                    width: typeof measurements.width === 'number' ? measurements.width : parseFloat(measurements.width) || undefined,
+                    height: (typeof measurements.height === 'number' ? measurements.height : parseFloat(measurements.height)) ||
+                        (typeof measurements.depth === 'number' ? measurements.depth : parseFloat(measurements.depth)) || undefined,
+                    depth: typeof measurements.depth === 'number' ? measurements.depth : parseFloat(measurements.depth) || undefined,
+                    area: typeof measurements.area === 'number' ? measurements.area : parseFloat(measurements.area) || undefined,
+                    confidence: typeof measurements.confidence === 'number' ? measurements.confidence : parseFloat(measurements.confidence) || 0.5,
+                    // Use the cleaned text (raw JSON string) as the description per user request
+                    description: cleanedText
+                };
+            }
+        } catch (e) {
+            console.warn('JSON Parse 1 Failed:', e);
         }
 
-        // Fallback: parse from text
+        // Fallback: parse from text using Regex
         return parseTextResponse(textResponse);
 
     } catch (error) {

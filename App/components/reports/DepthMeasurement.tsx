@@ -18,7 +18,7 @@ const { width, height } = Dimensions.get('window');
 type DepthMeasurementProps = {
     visible: boolean;
     onClose: () => void;
-    onMeasurementComplete: (depth: number, width?: number, area?: number) => void;
+    onMeasurementComplete: (depth: number, width?: number, area?: number, aiDescription?: string) => void;
 };
 
 type MeasurementMode = 'depth' | 'width';
@@ -155,7 +155,7 @@ export default function DepthMeasurement({
             const areaCm2 = Math.PI * radius * radius;
             const circleAreaM2 = areaCm2 / 10000;
 
-            onMeasurementComplete(measuredDepth, measuredWidth || undefined, circleAreaM2);
+            onMeasurementComplete(measuredDepth, measuredWidth || undefined, circleAreaM2, undefined);
             handleReset();
             onClose();
         } else {

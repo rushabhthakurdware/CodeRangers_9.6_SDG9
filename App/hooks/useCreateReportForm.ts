@@ -181,34 +181,48 @@ export function useCreateReportForm() {
         setIsAutoDetectModalVisible(false);
     };
 
-    const handleDepthMeasurement = (measuredDepth: number, measuredWidth?: number, measuredArea?: number) => {
-        setDepth(measuredDepth);
-        console.log('Measured depth:', measuredDepth);
+    const handleDepthMeasurement = (measuredDepth?: number, measuredWidth?: number, measuredArea?: number, aiDescription?: string) => {
+        setDepth(measuredDepth || null);
+        console.log('📝 handleDepthMeasurement Received:', { measuredDepth, measuredWidth, measuredArea, aiDescription });
 
         // Build measurement details text
         let measurementText = `[📏 Crack/Pothole Measurements]\n`;
-        measurementText += `• Length/Depth: ${measuredDepth.toFixed(1)} cm\n`;
 
-        if (measuredWidth) {
-            console.log('Measured width:', measuredWidth);
+        // Depth
+        if (measuredDepth !== undefined) {
+            measurementText += `• Length/Depth: ${measuredDepth.toFixed(1)} cm\n`;
+        }
+
+        // Width
+        if (measuredWidth !== undefined) {
+            console.log('Measured width exists:', measuredWidth);
             measurementText += `• Width/Diameter: ${measuredWidth.toFixed(1)} cm\n`;
+        }
 
-            // Use provided area or calculate it
-            // If area is provided (from circle calc), use it. Otherwise calc as rectangle
-            let areaVal = "";
-            if (measuredArea !== undefined) {
-                areaVal = measuredArea.toFixed(4);
-                measurementText += `• Area (Circle): ${areaVal} m²`;
-            } else {
-                areaVal = (measuredDepth * measuredWidth / 10000).toFixed(4);
-                measurementText += `• Area (Est. Rect): ${areaVal} m²`;
-            }
+        // Area: Use provided area OR calculate if BOTH dimensions exist
+        let areaVal = "";
+        if (measuredArea !== undefined) {
+            areaVal = measuredArea.toFixed(4);
+            measurementText += `• Area: ${areaVal} m²\n`;
+        } else if (measuredDepth !== undefined && measuredWidth !== undefined) {
+            // Fallback calc
+            areaVal = (measuredDepth * measuredWidth / 10000).toFixed(4);
+            measurementText += `• Area (Est. Rect): ${areaVal} m²\n`;
+        }
+
+        // Clean up trailing newline
+        measurementText = measurementText.trim();
+
+        // Add AI Description if available
+        if (aiDescription) {
+            console.log('Appending AI description');
+            measurementText += `\n\n• AI Description:\n${aiDescription}`;
         }
 
         // Append measurements to description
         setDescription((prevDesc) => {
             // Remove old measurement data if exists
-            const cleanDesc = prevDesc.replace(/\[📏 Crack Measurements\][\s\S]*?(?=\[|$)/g, '').trim();
+            const cleanDesc = prevDesc.replace(/\[📏 Crack\/Pothole Measurements\][\s\S]*?(?=\[|$)/g, '').trim();
 
             // Add new measurements
             const newDesc = cleanDesc
