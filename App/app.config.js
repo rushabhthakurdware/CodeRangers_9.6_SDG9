@@ -12,7 +12,8 @@ export default {
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "extra": {
-      "googleMapsApiKey": process.env.GOOGLE_MAPS_API_KEY
+      "googleMapsApiKey": process.env.GOOGLE_MAPS_API_KEY,
+      "geminiApiKey": process.env.GEMINI_API_KEY
     },
     "ios": {
       "supportsTablet": true

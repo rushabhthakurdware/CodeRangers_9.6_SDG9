@@ -14,13 +14,16 @@ import { useStylePalette } from '@/constants/StylePalette';
 import { SceneformView } from '@sceneview/react-native-sceneform';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import AutoPotholeDetection from './AutoPotholeDetection';
+import { Accelerometer } from 'expo-sensors';
+import { captureRef } from 'react-native-view-shot';
+import { analyzeImageWithGemini } from '@/lib/services/geminiAIDetection';
 
 const { width, height } = Dimensions.get('window');
 
 type DepthMeasurementProps = {
     visible: boolean;
     onClose: () => void;
-    onMeasurementComplete: (depth: number, width?: number) => void;
+    onMeasurementComplete: (depth: number, width?: number, area?: number) => void;
 };
 
 type MeasurementMode = 'depth' | 'width' | 'distance';
@@ -36,7 +39,7 @@ export default function DepthMeasurement({
     const camera = useRef<Camera>(null);
     const device = useCameraDevice('back');
 
-    const [detectionMode, setDetectionMode] = useState<'manual' | 'auto' | 'manual-camera'>('manual');
+    const [detectionMode, setDetectionMode] = useState<'manual' | 'auto' | 'manual-camera'>('manual'); // Start directly in AR mode
     const [mode, setMode] = useState<MeasurementMode>('depth');
     const [depth, setDepth] = useState<number | null>(null);
     const [widthValue, setWidthValue] = useState<number | null>(null);
@@ -47,12 +50,20 @@ export default function DepthMeasurement({
     const [cameraPermission, setCameraPermission] = useState(false);
     const [cameraActive, setCameraActive] = useState(false);
     const cameraViewRef = useRef<View>(null);
+    const viewShotRef = useRef<View>(null); // Ref for capturing screen
     const [cameraViewDimensions, setCameraViewDimensions] = useState({ width: 0, height: 0 });
+
+    // Track tap positions in AR mode for visual markers
+    const [arTapPoints, setArTapPoints] = useState<Array<{ x: number, y: number }>>([]);
 
     // AR distance detection state
     const [arDistanceToGround, setArDistanceToGround] = useState<number | null>(null);
     const [arSessionActive, setArSessionActive] = useState(false);
     const arSessionRef = useRef<any>(null);
+
+    // Sensor-based distance estimation (for manual-camera mode)
+    const [sensorDistance, setSensorDistance] = useState<number>(1.5);
+    const [tiltAngle, setTiltAngle] = useState<number>(45); // degrees
 
     // Refs to avoid stale closures in callbacks
     const sessionReadyRef = useRef(false);
@@ -127,6 +138,45 @@ export default function DepthMeasurement({
         }
     }, [detectionMode]);
 
+    // Accelerometer-based distance estimation for manual-camera mode
+    useEffect(() => {
+        let subscription: any;
+
+        if (detectionMode === 'manual-camera' && visible) {
+            // Set update interval to 100ms for responsive updates
+            Accelerometer.setUpdateInterval(100);
+
+            subscription = Accelerometer.addListener(({ x, y, z }) => {
+                // Calculate pitch angle (tilt forward/backward)
+                const pitch = Math.atan2(y, Math.sqrt(x * x + z * z)) * (180 / Math.PI);
+                const absPitch = Math.abs(pitch);
+                setTiltAngle(absPitch);
+
+                // Calculate distance based on tilt
+                // Assumes phone is at ~1.5m height when user holds it
+                const phoneHeight = 1.5; // meters
+                const tiltRadians = absPitch * (Math.PI / 180);
+
+                // Avoid division by zero and extreme angles
+                if (tiltRadians > 0.1 && tiltRadians < 1.4) { // ~6° to ~80°
+                    const calculatedDistance = phoneHeight / Math.cos(tiltRadians);
+                    // Clamp distance to reasonable range (0.5m to 3m)
+                    const clampedDistance = Math.max(0.5, Math.min(3.0, calculatedDistance));
+                    setSensorDistance(clampedDistance);
+                } else {
+                    // Fallback to 1.5m for extreme angles
+                    setSensorDistance(1.5);
+                }
+            });
+        }
+
+        return () => {
+            if (subscription) {
+                subscription.remove();
+            }
+        };
+    }, [detectionMode, visible]);
+
     // Track initialization time
     useEffect(() => {
         let interval: ReturnType<typeof setInterval> | undefined;
@@ -162,9 +212,9 @@ export default function DepthMeasurement({
         const focalLengthPixels = screenWidth / (2 * Math.tan(FOV_RADIANS / 2));
         console.log('focalLengthPixels:', focalLengthPixels);
 
-        // Use AR distance if available, otherwise fallback to estimate
-        const distanceToGround = arDistanceToGround || 1.5; // meters (AR or typical phone height)
-        console.log('arDistanceToGround:', arDistanceToGround, 'distanceToGround:', distanceToGround);
+        // Use AR distance if available, otherwise use sensor-based distance
+        const distanceToGround = arDistanceToGround || sensorDistance; // meters (AR or sensor-calculated)
+        console.log('arDistanceToGround:', arDistanceToGround, 'sensorDistance:', sensorDistance, 'distanceToGround:', distanceToGround);
 
         // Calculate pixels per meter at that distance
         const pixelsPerMeter = focalLengthPixels / distanceToGround;
@@ -177,7 +227,7 @@ export default function DepthMeasurement({
         console.log('=== CALCULATE DISTANCE END ===');
 
         return realDistanceCm;
-    }, [cameraViewDimensions, arDistanceToGround]);
+    }, [cameraViewDimensions, arDistanceToGround, sensorDistance]);
 
     // Handle camera view taps for manual measurement
     const handleCameraPress = useCallback((event: GestureResponderEvent) => {
@@ -287,10 +337,19 @@ export default function DepthMeasurement({
         const currentMeasurePoint = measurementPointRef.current;
         const currentMode = modeRef.current;
 
+        // Use actual screen coordinates if available, otherwise fallback to center
+        // Sceneform/ARCore tap events often provide screenX/Y or can be captured via separate touch handler
+        // For now, we try to access screen position from the event if exposed, or fallback
+        const tapScreenPos = {
+            x: event.screenX || event.locationX || width / 2,
+            y: event.screenY || event.locationY || height / 2
+        };
+
         if (!currentRefPoint) {
             // First tap: set reference point
             setReferencePoint(hitPoint);
             referencePointRef.current = hitPoint;
+            setArTapPoints([tapScreenPos]); // First pin
 
             const instruction = currentMode === 'depth'
                 ? 'Now tap the BOTTOM of the pothole'
@@ -300,6 +359,7 @@ export default function DepthMeasurement({
             // Second tap: set measurement point and calculate
             setMeasurementPoint(hitPoint);
             measurementPointRef.current = hitPoint;
+            setArTapPoints(prev => [...prev, tapScreenPos]); // Second pin
 
             if (currentMode === 'depth') {
                 // Calculate 3D distance (depth) using real AR coordinates
@@ -325,13 +385,17 @@ export default function DepthMeasurement({
                 Alert.alert('Width Measured', `${calculatedWidth.toFixed(1)} cm`);
             }
 
-            // Reset for next measurement
+            // Reset logic removed to keep pins on screen
+            // User can manually reset or click save
+            /* 
             setTimeout(() => {
                 setReferencePoint(null);
                 referencePointRef.current = null;
                 setMeasurementPoint(null);
                 measurementPointRef.current = null;
+                setArTapPoints([]); // Clear pins
             }, 500);
+            */
         }
     }, []);
 
@@ -344,6 +408,7 @@ export default function DepthMeasurement({
 
         setMeasurementPoint(null);
         measurementPointRef.current = null;
+        setArTapPoints([]); // Clear visual pins on reset
     }, []);
 
     const toggleMode = useCallback(() => {
@@ -353,7 +418,14 @@ export default function DepthMeasurement({
 
     const handleSave = useCallback(() => {
         if (depth !== null || widthValue !== null) {
-            onMeasurementComplete(depth || 0, widthValue || undefined);
+            // Calculate circle area using width as diameter: A = π * (d/2)²
+            const diameter = widthValue || depth || 0;
+            const radius = diameter / 2;
+            const circleArea = Math.PI * radius * radius / 10000; // Convert cm² to m²
+
+            console.log(`Circle Area: diameter=${diameter}cm, area=${circleArea.toFixed(4)}m²`);
+
+            onMeasurementComplete(depth || 0, widthValue || undefined, circleArea);
             handleReset();
             onClose();
         }
@@ -511,22 +583,12 @@ export default function DepthMeasurement({
                                     <View style={[cstyles.crosshairVertical, { backgroundColor: '#00aaff' }]} />
                                 </View>
 
-                                {/* Invisible AR overlay for distance detection */}
-                                <View style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}>
-                                    <SceneformView
-                                        displayPlanes={false}
-                                        onSessionCreate={handleArSessionForDistance}
-                                        onTapPlane={handleArPlaneForDistance}
-                                        style={{ width: 1, height: 1 }}
-                                    />
-                                </View>
-
                                 {/* Distance indicator */}
                                 <View style={cstyles.distanceIndicator}>
                                     <Text style={cstyles.distanceIndicatorText}>
                                         📏 {arDistanceToGround
                                             ? `${arDistanceToGround.toFixed(2)}m (AR)`
-                                            : '1.5m (estimated)'}
+                                            : `${sensorDistance.toFixed(2)}m (sensor ~${tiltAngle.toFixed(0)}°)`}
                                     </Text>
                                 </View>
                             </TouchableOpacity>
@@ -604,22 +666,54 @@ export default function DepthMeasurement({
             onRequestClose={handleCancel}
         >
             <View style={[cstyles.container, { backgroundColor: colors.background }]}>
-                {/* Header */}
                 <View style={cstyles.header}>
                     <TouchableOpacity
-                        onPress={() => {
-                            if (detectionMode === 'manual') {
-                                setDetectionMode('manual-camera');
-                            } else if (detectionMode === 'manual-camera') {
-                                setDetectionMode('auto');
-                            } else {
-                                setDetectionMode('manual');
+                        onPress={async () => {
+                            try {
+                                if (viewShotRef.current) {
+                                    Alert.alert('⏳ Processing', 'Capturing view and analyzing with Gemini AI...');
+
+                                    // Capture the AR view
+                                    const uri = await captureRef(viewShotRef, {
+                                        format: 'jpg',
+                                        quality: 0.8,
+                                        result: 'base64'
+                                    });
+
+                                    // Analyze with Gemini
+                                    const result = await analyzeImageWithGemini(uri);
+
+                                    if (result) {
+                                        console.log('AI Result:', result);
+                                        const { width, height, depth, area, confidence } = result;
+
+                                        // Auto-save the results
+                                        onMeasurementComplete(
+                                            height || depth || 0, // Depth
+                                            width,                // Width
+                                            area // Area
+                                        );
+
+                                        Alert.alert(
+                                            '✨ AI Analysis Complete',
+                                            `Detected:\nDepth/Length: ${height || depth || 0} cm\nWidth: ${width || 0} cm\nArea: ${area || 0} m²\nConfidence: ${(confidence || 0) * 100}%`
+                                        );
+                                        onClose();
+                                    } else {
+                                        Alert.alert('Error', 'Could not detect measurements.');
+                                    }
+                                } else {
+                                    Alert.alert('Error', 'Camera view not ready');
+                                }
+                            } catch (error) {
+                                console.error('AI Detection Error:', error);
+                                Alert.alert('Error', 'Failed to analyze image: ' + (error as any).message);
                             }
                         }}
                         style={[cstyles.modeToggleButton, { borderColor: colors.mediaAddButton }]}
                     >
                         <Text style={[styles.buttonText, { fontSize: 14 }]}>
-                            {detectionMode === 'manual' ? '📍 AR Mode' : detectionMode === 'manual-camera' ? '📏 Screen Tap' : '🤖 Auto'}
+                            🤖 AI Detect
                         </Text>
                     </TouchableOpacity>
                     <Text style={[styles.title, { fontSize: 20 }]}>
@@ -631,7 +725,11 @@ export default function DepthMeasurement({
                 </View>
 
                 {/* AR Camera View */}
-                <View style={cstyles.sceneContainer}>
+                <View
+                    ref={viewShotRef}
+                    collapsable={false}
+                    style={cstyles.sceneContainer}
+                >
                     <SceneformView
                         displayPlanes={true}
                         onSessionCreate={handleSessionCreate}
@@ -665,6 +763,23 @@ export default function DepthMeasurement({
                             <View style={[cstyles.crosshairVertical, { backgroundColor: mode === 'depth' ? '#00ff00' : '#00aaff' }]} />
                         </View>
                     )}
+
+                    {/* Visual pin markers for AR taps */}
+                    {arTapPoints.map((point, index) => (
+                        <View
+                            key={index}
+                            style={[
+                                cstyles.pointMarker,
+                                {
+                                    left: point.x - 10,
+                                    top: point.y - 10,
+                                    backgroundColor: index === 0 ? '#00ff00' : '#00aaff',
+                                },
+                            ]}
+                        >
+                            <Text style={cstyles.pointLabel}>{index + 1}</Text>
+                        </View>
+                    ))}
                 </View>
 
                 {/* Instructions */}
@@ -674,37 +789,12 @@ export default function DepthMeasurement({
                     </Text>
                 </View>
 
-                {/* Mode Toggle */}
+                {/* Mode Toggle Removed as requested - using unified pin mode */}
+                {/* 
                 <View style={cstyles.modeToggle}>
-                    <TouchableOpacity
-                        style={[
-                            cstyles.modeButton,
-                            mode === 'depth' && cstyles.modeButtonActive,
-                            { borderColor: colors.mediaAddButton },
-                        ]}
-                        onPress={() => {
-                            if (mode !== 'depth') toggleMode();
-                        }}
-                    >
-                        <Text style={[styles.buttonText, { fontSize: 14, color: mode === 'depth' ? colors.buttonText : colors.text }]}>
-                            📏 Depth
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[
-                            cstyles.modeButton,
-                            mode === 'width' && cstyles.modeButtonActive,
-                            { borderColor: colors.mediaAddButton },
-                        ]}
-                        onPress={() => {
-                            if (mode !== 'width') toggleMode();
-                        }}
-                    >
-                        <Text style={[styles.buttonText, { fontSize: 14, color: mode === 'width' ? colors.buttonText : colors.text }]}>
-                            ↔️ Width
-                        </Text>
-                    </TouchableOpacity>
-                </View>
+                   ... removed ...
+                </View> 
+                */}
 
                 {/* Controls */}
                 <View style={cstyles.controls}>

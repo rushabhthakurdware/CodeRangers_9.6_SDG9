@@ -18,6 +18,7 @@ type ReportFormProps = {
   onPickMedia: () => void;
   onCaptureMedia: () => void;
   onMeasureDepth?: () => void;
+  onAutoDetect?: () => void;
   location: { lat: number; lng: number } | null;
   isFetchingLocation: boolean;
   onFetchLocation: () => void;
@@ -33,6 +34,7 @@ export default function ReportForm({
   onPickMedia,
   onCaptureMedia,
   onMeasureDepth,
+  onAutoDetect,
   location,
   isFetchingLocation,
   onFetchLocation,
@@ -80,6 +82,7 @@ export default function ReportForm({
         onPickMedia={onPickMedia}
         onCaptureMedia={onCaptureMedia}
         onMeasureDepth={onMeasureDepth}
+        onAutoDetect={onAutoDetect}
       />
       <View style={[styles.separator, {}]} />
     </View>

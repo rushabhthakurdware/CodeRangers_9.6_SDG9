@@ -19,6 +19,7 @@ type MediaPickerProps = {
   onPickMedia: () => void;
   onCaptureMedia: () => void;
   onMeasureDepth?: () => void;
+  onAutoDetect?: () => void;
 };
 
 export default function MediaPicker({
@@ -26,6 +27,7 @@ export default function MediaPicker({
   onPickMedia,
   onCaptureMedia,
   onMeasureDepth,
+  onAutoDetect,
 }: MediaPickerProps) {
   // 1. Get the effective theme ('light' or 'dark')
   const { effectiveTheme, colors } = useTheme();
@@ -78,7 +80,24 @@ export default function MediaPicker({
             onPress={onMeasureDepth}
           >
             <Text style={[styles.buttonText, { fontSize: 12 }]}>
-              Measure Depth
+              📏 AR Measure
+            </Text>
+          </TouchableOpacity>
+        )}
+        {onAutoDetect && (
+          <TouchableOpacity
+            style={[
+              styles.simpleButton,
+              {
+                width: width * 0.28,
+                backgroundColor: colors.mediaAddButton,
+                paddingVertical: 10,
+              },
+            ]}
+            onPress={onAutoDetect}
+          >
+            <Text style={[styles.buttonText, { fontSize: 12 }]}>
+              🤖 Auto Detect
             </Text>
           </TouchableOpacity>
         )}

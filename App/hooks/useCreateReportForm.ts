@@ -21,6 +21,9 @@ export function useCreateReportForm() {
     // 3. Add state for depth measurement
     const [depth, setDepth] = useState<number | null>(null);
     const [isDepthModalVisible, setIsDepthModalVisible] = useState(false);
+
+    // 4. Add state for auto-detect modal
+    const [isAutoDetectModalVisible, setIsAutoDetectModalVisible] = useState(false);
     const pickMedia = async () => {
         /*
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -170,12 +173,49 @@ export function useCreateReportForm() {
         setIsDepthModalVisible(false);
     };
 
-    const handleDepthMeasurement = (measuredDepth: number, measuredWidth?: number) => {
+    const openAutoDetect = () => {
+        setIsAutoDetectModalVisible(true);
+    };
+
+    const closeAutoDetect = () => {
+        setIsAutoDetectModalVisible(false);
+    };
+
+    const handleDepthMeasurement = (measuredDepth: number, measuredWidth?: number, measuredArea?: number) => {
         setDepth(measuredDepth);
         console.log('Measured depth:', measuredDepth);
+
+        // Build measurement details text
+        let measurementText = `[📏 Crack/Pothole Measurements]\n`;
+        measurementText += `• Length/Depth: ${measuredDepth.toFixed(1)} cm\n`;
+
         if (measuredWidth) {
             console.log('Measured width:', measuredWidth);
+            measurementText += `• Width/Diameter: ${measuredWidth.toFixed(1)} cm\n`;
+
+            // Use provided area or calculate it
+            // If area is provided (from circle calc), use it. Otherwise calc as rectangle
+            let areaVal = "";
+            if (measuredArea !== undefined) {
+                areaVal = measuredArea.toFixed(4);
+                measurementText += `• Area (Circle): ${areaVal} m²`;
+            } else {
+                areaVal = (measuredDepth * measuredWidth / 10000).toFixed(4);
+                measurementText += `• Area (Est. Rect): ${areaVal} m²`;
+            }
         }
+
+        // Append measurements to description
+        setDescription((prevDesc) => {
+            // Remove old measurement data if exists
+            const cleanDesc = prevDesc.replace(/\[📏 Crack Measurements\][\s\S]*?(?=\[|$)/g, '').trim();
+
+            // Add new measurements
+            const newDesc = cleanDesc
+                ? `${cleanDesc}\n\n${measurementText}`
+                : measurementText;
+            return newDesc;
+        });
     };
 
 
@@ -244,5 +284,8 @@ export function useCreateReportForm() {
         openDepthMeasurement,
         closeDepthMeasurement,
         handleDepthMeasurement,
+        isAutoDetectModalVisible,
+        openAutoDetect,
+        closeAutoDetect,
     };
 }

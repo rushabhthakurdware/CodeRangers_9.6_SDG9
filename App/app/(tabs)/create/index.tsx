@@ -14,6 +14,7 @@ import ThemeCycleButton from "@/components/theming/ThemeCycleButton";
 import { useTheme } from "@/hooks/useTheme";
 import { useStylePalette } from "@/constants/StylePalette";
 import DepthMeasurement from "@/components/reports/DepthMeasurement";
+import AutoPotholeDetection from "@/components/reports/AutoPotholeDetection";
 
 const { width, height } = Dimensions.get("window");
 
@@ -36,6 +37,9 @@ export default function CreateScreen() {
     openDepthMeasurement,
     closeDepthMeasurement,
     handleDepthMeasurement,
+    isAutoDetectModalVisible,
+    openAutoDetect,
+    closeAutoDetect,
   } = useCreateReportForm();
 
   const { colors } = useTheme();
@@ -61,6 +65,7 @@ export default function CreateScreen() {
           onPickMedia={pickMedia}
           onCaptureMedia={captureMedia}
           onMeasureDepth={openDepthMeasurement}
+          onAutoDetect={openAutoDetect}
           location={location}
           isFetchingLocation={isFetchingLocation}
           onFetchLocation={fetchLocation}
@@ -70,6 +75,13 @@ export default function CreateScreen() {
         <DepthMeasurement
           visible={isDepthModalVisible}
           onClose={closeDepthMeasurement}
+          onMeasurementComplete={handleDepthMeasurement}
+        />
+
+        {/* Auto Pothole Detection Modal */}
+        <AutoPotholeDetection
+          visible={isAutoDetectModalVisible}
+          onClose={closeAutoDetect}
           onMeasurementComplete={handleDepthMeasurement}
         />
 
