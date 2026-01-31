@@ -220,31 +220,55 @@ export function useCreateReportForm() {
 
 
     const savePost = async () => {
-        if (!title || !description || !location) {
-            Alert.alert("Missing Information", "Please provide title, description, and location.");
+        if (!location) {
+            Alert.alert("Missing Information", "Please allow location access to submit a report.");
             return false;
         }
 
         setLoading(true);
         try {
-            console.log("Submitting report:", {
-                title,
-                description,
-                location,
-                locationAddress,
-                depth
-            });
+            // Construct the full payload for the new backend
+            const payload = {
+                location: {
+                    lat: location.lat,
+                    lon: location.lng,
+                },
+                asset: {
+                    type: "road", // Default asset type
+                    geometry: {
+                        area_m2: depth && 0.0, // Placeholder if no area, can be enhanced
+                    },
+                },
+                ar_measurements: {
+                    crack_length_cm: depth || 0,
+                    crack_width_mm: 0, // We need to capture width separately if available
+                    surface_deformation: "moderate", // Default or user-selected
+                    has_ar_reference: depth !== null,
+                },
+                crowd_reports: [
+                    {
+                        lat: location.lat,
+                        lon: location.lng,
+                        time: new Date().toISOString(),
+                    },
+                ],
+                // Additional metadata
+                description: description,
+                title: title,
+                days_unresolved: 1, // Default
+            };
 
-            const response = await createReport(
-                title,
-                description, // Use description as-is (address already appended)
-                location,
-                "pothole",
-                mediaList
-            );
+            console.log("🚀 Submitting FULL Payload to /analyze-complete:", JSON.stringify(payload, null, 2));
 
-            if (response) {
-                Alert.alert("Success", "Report submitted successfully!");
+            // Import apiService dynamically to avoid circular dependencies if any
+            const { apiService } = require('@/lib/api/apiClient');
+
+            const response = await apiService.analyzeIssue(payload);
+
+            console.log("✅ Analysis Result:", response.data);
+
+            if (response.data && response.data.status === 'success') {
+                Alert.alert("Success", "Report analyzed and submitted successfully!");
                 setTitle("");
                 setDescription("");
                 setMediaList([]);
@@ -253,12 +277,12 @@ export function useCreateReportForm() {
                 setDepth(null);
                 return true;
             } else {
-                Alert.alert("Error", "Failed to submit report.");
-                return false;
+                Alert.alert("Notice", "Report submitted but server returned: " + (response.data?.message || "Unknown status"));
+                return true;
             }
         } catch (error) {
             console.error("Error submitting report:", error);
-            Alert.alert("Error", "An unexpected error occurred.");
+            Alert.alert("Error", "Failed to connect to backend. Check connection.");
             return false;
         } finally {
             setLoading(false);

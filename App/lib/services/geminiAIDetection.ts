@@ -66,8 +66,8 @@ Return your response as JSON with fields: width, height, depth, area, confidence
         }
         console.log(`Using Gemini API Key: ${GEMINI_API_KEY.substring(0, 4)}...`);
 
-        // User requested specific model: Gemini 2.5 Flash Lite
-        const model = 'gemini-2.5-flash-lite';
+        // User confirmed available model: Gemini 2.5 Flash (Multi-modal)
+        const model = 'gemini-2.5-flash';
 
         console.log(`Trying Gemini Model: ${model}...`);
 

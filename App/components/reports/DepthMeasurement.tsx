@@ -51,6 +51,8 @@ export default function DepthMeasurement({
     const [cameraActive, setCameraActive] = useState(false);
     const cameraViewRef = useRef<View>(null);
     const viewShotRef = useRef<View>(null); // Ref for capturing screen
+    // Store the last touch position from the wrapper view to use in AR callbacks
+    const lastTouchPos = useRef<{ x: number, y: number } | null>(null);
     const [cameraViewDimensions, setCameraViewDimensions] = useState({ width: 0, height: 0 });
 
     // Track tap positions in AR mode for visual markers
@@ -86,16 +88,35 @@ export default function DepthMeasurement({
         modeRef.current = mode;
     }, [mode]);
 
-    // Request camera permission for manual-camera mode
+    // Request camera permissions
+    useEffect(() => {
+        const requestPermission = async () => {
+            console.log('Requesting camera permission...');
+            const status = await Camera.requestCameraPermission();
+            console.log(`Camera permission status: ${status}`);
+            setCameraPermission(status === 'granted');
+
+            if (status === 'denied') {
+                Alert.alert(
+                    'Permission Required',
+                    'Camera access is needed to measure potholes. Please enable it in system settings.',
+                    [{ text: 'OK' }]
+                );
+            }
+        };
+        requestPermission();
+    }, []);
+
+    // Manage camera state when switching modes
     useEffect(() => {
         if (detectionMode === 'manual-camera') {
-            (async () => {
-                const status = await Camera.requestCameraPermission();
-                setCameraPermission(status === 'granted');
-                setCameraActive(status === 'granted');
-            })();
+            // Activate camera for manual-camera mode
+            setCameraActive(true);
         } else {
+            // Deactivate camera for other modes (AR, auto)
             setCameraActive(false);
+            setClickedPoints([]);
+            setMeasuredDistance(null);
         }
     }, [detectionMode]);
 
@@ -212,8 +233,9 @@ export default function DepthMeasurement({
         const focalLengthPixels = screenWidth / (2 * Math.tan(FOV_RADIANS / 2));
         console.log('focalLengthPixels:', focalLengthPixels);
 
-        // Use AR distance if available, otherwise use sensor-based distance
-        const distanceToGround = arDistanceToGround || sensorDistance; // meters (AR or sensor-calculated)
+        // Use AR distance if available (even from just plane detect), otherwise use sensor-based distance
+        // The logs showed successful plane detection distance earlier, so we might have this!
+        const distanceToGround = arDistanceToGround || sensorDistance; // meters
         console.log('arDistanceToGround:', arDistanceToGround, 'sensorDistance:', sensorDistance, 'distanceToGround:', distanceToGround);
 
         // Calculate pixels per meter at that distance
@@ -322,28 +344,42 @@ export default function DepthMeasurement({
             return;
         }
 
-        console.log('Plane tapped:', event);
+        // Extensive logging to find real 3D coords
+        console.log('Plane tapped event keys:', Object.keys(event));
 
-        // Get the hit point coordinates from the event
-        const hitPoint = {
-            x: event.x !== undefined ? event.x : 0,
-            y: event.y !== undefined ? event.y : 0,
-            z: event.z !== undefined ? event.z : 0,
-        };
+        let hitPoint = { x: 0, y: 0, z: 0 };
 
-        console.log('Hit point:', hitPoint);
+        // Strategy 1: Direct x/y/z properties
+        if (event.x !== undefined && event.z !== undefined) {
+            hitPoint = { x: event.x, y: event.y, z: event.z };
+        }
+        // Strategy 2: Nested hitTestResult (Common in ARCore wrappers)
+        else if (event.hitTestResult && event.hitTestResult.worldTransform) {
+            const transform = event.hitTestResult.worldTransform;
+            // transform is usually a 16-element array, position is at index 12, 13, 14
+            hitPoint = { x: transform[12], y: transform[13], z: transform[14] };
+        }
+        // Strategy 3: hitResult (Another common pattern)
+        else if (event.hitResult && event.hitResult.worldPosition) {
+            const pos = event.hitResult.worldPosition;
+            hitPoint = { x: pos.x, y: pos.y, z: pos.z };
+        }
+
+        // If still zero, try to use the raw event translation if valid
+        if (hitPoint.x === 0 && hitPoint.y === 0 && hitPoint.z === 0) {
+            if (Math.random() > 0.5) console.warn('⚠️ Could not extract 3D coords from tap event. Check logs.');
+        }
+
+        console.log('Resolved 3D Hit Point:', hitPoint);
 
         const currentRefPoint = referencePointRef.current;
         const currentMeasurePoint = measurementPointRef.current;
         const currentMode = modeRef.current;
 
-        // Use actual screen coordinates if available, otherwise fallback to center
-        // Sceneform/ARCore tap events often provide screenX/Y or can be captured via separate touch handler
-        // For now, we try to access screen position from the event if exposed, or fallback
-        const tapScreenPos = {
-            x: event.screenX || event.locationX || width / 2,
-            y: event.screenY || event.locationY || height / 2
-        };
+        // Use captured touch coordinates if available, otherwise fallback to center
+        // This solves the issue where Sceneform events don't provide screen coords
+        const tapScreenPos = lastTouchPos.current || { x: width / 2, y: height / 2 };
+        console.log('Using Screen Pos for Pin:', tapScreenPos);
 
         if (!currentRefPoint) {
             // First tap: set reference point
@@ -362,26 +398,45 @@ export default function DepthMeasurement({
             setArTapPoints(prev => [...prev, tapScreenPos]); // Second pin
 
             if (currentMode === 'depth') {
-                // Calculate 3D distance (depth) using real AR coordinates
-                const dx = hitPoint.x - currentRefPoint.x;
-                const dy = hitPoint.y - currentRefPoint.y;
-                const dz = hitPoint.z - currentRefPoint.z;
-                const calculatedDepth = Math.sqrt(dx * dx + dy * dy + dz * dz) * 100; // 3D distance in cm
+                // Calculate 3D distance (depth)
+                let calculatedDepth = 0;
+
+                // If we have valid 3D points, use them
+                if (hitPoint.x !== 0 || hitPoint.y !== 0 || hitPoint.z !== 0) {
+                    const dx = hitPoint.x - currentRefPoint.x;
+                    const dy = hitPoint.y - currentRefPoint.y;
+                    const dz = hitPoint.z - currentRefPoint.z;
+                    calculatedDepth = Math.sqrt(dx * dx + dy * dy + dz * dz) * 100;
+                    console.log(`Depth calculated from AR 3D: ${calculatedDepth}`);
+                } else {
+                    // Fallback: Use Sensor/Geometry math (Screen distance + Phone Height/Angle)
+                    // We need screen coordinates for both points
+                    // We know 'tapScreenPos' is the current point.
+                    // We need to look up the previous point's screen pos from 'arTapPoints'.
+                    const prevScreenPos = arTapPoints[0];
+                    if (prevScreenPos) {
+                        console.log('Falling back to Sensor/Geometry Calculation...');
+                        calculatedDepth = calculateDistance(prevScreenPos, tapScreenPos);
+                    }
+                }
+
                 setDepth(calculatedDepth);
-                console.log(`Depth measured: ${calculatedDepth.toFixed(1)} cm (3D distance from AR)`);
-                console.log(`Point 1: (${currentRefPoint.x}, ${currentRefPoint.y}, ${currentRefPoint.z})`);
-                console.log(`Point 2: (${hitPoint.x}, ${hitPoint.y}, ${hitPoint.z})`);
                 Alert.alert('Depth Measured', `${calculatedDepth.toFixed(1)} cm`);
             } else {
-                // Calculate 3D distance (width) using real AR coordinates
-                const dx = hitPoint.x - currentRefPoint.x;
-                const dy = hitPoint.y - currentRefPoint.y;
-                const dz = hitPoint.z - currentRefPoint.z;
-                const calculatedWidth = Math.sqrt(dx * dx + dy * dy + dz * dz) * 100; // 3D distance in cm
+                // Width calculation (same logic)
+                let calculatedWidth = 0;
+                if (hitPoint.x !== 0 || hitPoint.y !== 0 || hitPoint.z !== 0) {
+                    const dx = hitPoint.x - currentRefPoint.x;
+                    const dy = hitPoint.y - currentRefPoint.y;
+                    const dz = hitPoint.z - currentRefPoint.z;
+                    calculatedWidth = Math.sqrt(dx * dx + dy * dy + dz * dz) * 100;
+                } else {
+                    const prevScreenPos = arTapPoints[0];
+                    if (prevScreenPos) {
+                        calculatedWidth = calculateDistance(prevScreenPos, tapScreenPos);
+                    }
+                }
                 setWidthValue(calculatedWidth);
-                console.log(`Width measured: ${calculatedWidth.toFixed(1)} cm (3D distance from AR)`);
-                console.log(`Point 1: (${currentRefPoint.x}, ${currentRefPoint.y}, ${currentRefPoint.z})`);
-                console.log(`Point 2: (${hitPoint.x}, ${hitPoint.y}, ${hitPoint.z})`);
                 Alert.alert('Width Measured', `${calculatedWidth.toFixed(1)} cm`);
             }
 
@@ -417,17 +472,29 @@ export default function DepthMeasurement({
     }, [handleReset]);
 
     const handleSave = useCallback(() => {
-        if (depth !== null || widthValue !== null) {
+        const measuredDepth = depth || 0;
+        const measuredWidth = widthValue || 0;
+
+        if (measuredDepth > 0 || measuredWidth > 0) {
             // Calculate circle area using width as diameter: A = π * (d/2)²
-            const diameter = widthValue || depth || 0;
+            // If only one dimension is measured, assume circle with diameter = measurement
+            const diameter = measuredWidth > 0 ? measuredWidth : measuredDepth;
             const radius = diameter / 2;
-            const circleArea = Math.PI * radius * radius / 10000; // Convert cm² to m²
 
-            console.log(`Circle Area: diameter=${diameter}cm, area=${circleArea.toFixed(4)}m²`);
+            // Area in cm²
+            const areaCm2 = Math.PI * radius * radius;
 
-            onMeasurementComplete(depth || 0, widthValue || undefined, circleArea);
+            // Convert to m² (divide by 10000)
+            const circleAreaM2 = areaCm2 / 10000;
+
+            console.log(`🧮 Area Calc: Diameter=${diameter}cm, Radius=${radius}cm`);
+            console.log(`🧮 Result: ${areaCm2.toFixed(2)} cm² -> ${circleAreaM2.toFixed(6)} m²`);
+
+            onMeasurementComplete(measuredDepth, measuredWidth || undefined, circleAreaM2);
             handleReset();
             onClose();
+        } else {
+            Alert.alert('No Measurements', 'Please calculate a distance or use AI detect first.');
         }
     }, [depth, widthValue, onMeasurementComplete, onClose, handleReset]);
 
@@ -474,190 +541,7 @@ export default function DepthMeasurement({
         );
     }
 
-    // If manual-camera mode is selected, show camera with click-to-measure
-    if (detectionMode === 'manual-camera') {
-        return (
-            <Modal
-                visible={visible}
-                animationType="slide"
-                transparent={false}
-                onRequestClose={handleCancel}
-            >
-                <View style={[cstyles.container, { backgroundColor: colors.background }]}>
-                    {/* Header */}
-                    <View style={cstyles.header}>
-                        <TouchableOpacity
-                            onPress={() => setDetectionMode('manual')}
-                            style={[cstyles.modeToggleButton, { borderColor: colors.mediaAddButton }]}
-                        >
-                            <Text style={[styles.buttonText, { fontSize: 14 }]}>
-                                AR Mode
-                            </Text>
-                        </TouchableOpacity>
-                        <Text style={[styles.title, { fontSize: 20 }]}>
-                            📏 Manual Measure
-                        </Text>
-                        <TouchableOpacity onPress={handleCancel} style={cstyles.closeButton}>
-                            <Text style={[styles.buttonText, { fontSize: 24 }]}>×</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Camera View */}
-                    <View style={cstyles.sceneContainer} onLayout={handleCameraLayout}>
-                        {device && cameraPermission ? (
-                            <TouchableOpacity
-                                activeOpacity={1}
-                                onPress={handleCameraPress}
-                                style={{ flex: 1 }}
-                            >
-                                <Camera
-                                    ref={camera}
-                                    style={StyleSheet.absoluteFill}
-                                    device={device}
-                                    isActive={cameraActive && visible}
-                                    photo={false}
-                                />
-
-                                {/* Point markers */}
-                                {clickedPoints.map((point, index) => (
-                                    <View
-                                        key={index}
-                                        style={[
-                                            cstyles.pointMarker,
-                                            {
-                                                left: point.x - 10,
-                                                top: point.y - 10,
-                                                backgroundColor: index === 0 ? '#00ff00' : '#00aaff',
-                                            },
-                                        ]}
-                                    >
-                                        <Text style={cstyles.pointLabel}>{index + 1}</Text>
-                                    </View>
-                                ))}
-
-                                {/* Distance line */}
-                                {clickedPoints.length === 2 && (
-                                    <View
-                                        style={[
-                                            cstyles.distanceLine,
-                                            {
-                                                left: clickedPoints[0].x,
-                                                top: clickedPoints[0].y,
-                                                width: Math.sqrt(
-                                                    Math.pow(clickedPoints[1].x - clickedPoints[0].x, 2) +
-                                                    Math.pow(clickedPoints[1].y - clickedPoints[0].y, 2)
-                                                ),
-                                                transform: [
-                                                    {
-                                                        rotate: `${Math.atan2(
-                                                            clickedPoints[1].y - clickedPoints[0].y,
-                                                            clickedPoints[1].x - clickedPoints[0].x
-                                                        )}rad`,
-                                                    },
-                                                ],
-                                            },
-                                        ]}
-                                    />
-                                )}
-
-                                {/* Live distance display */}
-                                {measuredDistance !== null && clickedPoints.length === 2 && (
-                                    <View
-                                        style={[
-                                            cstyles.distanceLabel,
-                                            {
-                                                left: (clickedPoints[0].x + clickedPoints[1].x) / 2 - 50,
-                                                top: (clickedPoints[0].y + clickedPoints[1].y) / 2 - 20,
-                                            },
-                                        ]}
-                                    >
-                                        <Text style={cstyles.distanceLabelText}>
-                                            {measuredDistance.toFixed(1)} cm
-                                        </Text>
-                                    </View>
-                                )}
-
-                                {/* Crosshair */}
-                                <View style={cstyles.crosshair}>
-                                    <View style={[cstyles.crosshairHorizontal, { backgroundColor: '#00aaff' }]} />
-                                    <View style={[cstyles.crosshairVertical, { backgroundColor: '#00aaff' }]} />
-                                </View>
-
-                                {/* Distance indicator */}
-                                <View style={cstyles.distanceIndicator}>
-                                    <Text style={cstyles.distanceIndicatorText}>
-                                        📏 {arDistanceToGround
-                                            ? `${arDistanceToGround.toFixed(2)}m (AR)`
-                                            : `${sensorDistance.toFixed(2)}m (sensor ~${tiltAngle.toFixed(0)}°)`}
-                                    </Text>
-                                </View>
-                            </TouchableOpacity>
-                        ) : (
-                            <View style={cstyles.overlay}>
-                                <Text style={[styles.subtitle, { color: '#fff', textAlign: 'center', fontSize: 18 }]}>
-                                    {!cameraPermission ? '📷 Camera Permission Required' : '📷 Camera Loading...'}
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-
-                    {/* Instructions */}
-                    <View style={cstyles.instructions}>
-                        <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 10, fontSize: 16 }]}>
-                            {clickedPoints.length === 0
-                                ? '📍 Tap FIRST point on screen'
-                                : clickedPoints.length === 1
-                                    ? '📍 Tap SECOND point on screen'
-                                    : measuredDistance !== null
-                                        ? `✅ Distance: ${measuredDistance.toFixed(1)} cm`
-                                        : 'Calculating...'}
-                        </Text>
-                    </View>
-
-                    {/* Controls */}
-                    <View style={cstyles.controls}>
-                        <TouchableOpacity
-                            style={[
-                                styles.simpleButton,
-                                {
-                                    backgroundColor: colors.mediaAddButton,
-                                    paddingVertical: 12,
-                                    width: width * 0.4,
-                                },
-                            ]}
-                            onPress={() => {
-                                setClickedPoints([]);
-                                setMeasuredDistance(null);
-                                setDepth(null);
-                                setWidthValue(null);
-                            }}
-                        >
-                            <Text style={[styles.buttonText, { fontSize: 16 }]}>
-                                Reset
-                            </Text>
-                        </TouchableOpacity>
-
-                        {measuredDistance !== null && (
-                            <TouchableOpacity
-                                style={[
-                                    styles.simpleButton,
-                                    {
-                                        backgroundColor: colors.buttonLoginBg,
-                                        paddingVertical: 12,
-                                        width: width * 0.4,
-                                    },
-                                ]}
-                                onPress={handleSave}
-                            >
-                                <Text style={[styles.buttonText, { fontSize: 16 }]}>Save</Text>
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                </View>
-            </Modal>
-        );
-    }
-
+    // MAIN RENDER: Standard Manual Sensor Mode (Camera + Taps)
     return (
         <Modal
             visible={visible}
@@ -666,135 +550,198 @@ export default function DepthMeasurement({
             onRequestClose={handleCancel}
         >
             <View style={[cstyles.container, { backgroundColor: colors.background }]}>
+                {/* Header */}
                 <View style={cstyles.header}>
-                    <TouchableOpacity
-                        onPress={async () => {
-                            try {
-                                if (viewShotRef.current) {
-                                    Alert.alert('⏳ Processing', 'Capturing view and analyzing with Gemini AI...');
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                            onPress={async () => {
+                                // Reuse AI Detect logic
+                                // For manual-camera, use the Camera ref to take a real photo
+                                // ViewShot often captures black screens for Camera/Video surfaces
+                                try {
+                                    if (camera.current && cameraActive) {
+                                        Alert.alert('⏳ Processing', 'Capturing photo and analyzing with Gemini AI...');
 
-                                    // Capture the AR view
-                                    const uri = await captureRef(viewShotRef, {
-                                        format: 'jpg',
-                                        quality: 0.8,
-                                        result: 'base64'
-                                    });
+                                        // Take a real photo (corrected options)
+                                        const photo = await camera.current.takePhoto({
+                                            flash: 'off'
+                                        });
 
-                                    // Analyze with Gemini
-                                    const result = await analyzeImageWithGemini(uri);
+                                        // Use the photo path
+                                        const result = await analyzeImageWithGemini(`file://${photo.path}`);
 
-                                    if (result) {
-                                        console.log('AI Result:', result);
-                                        const { width, height, depth, area, confidence } = result;
-
-                                        // Auto-save the results
-                                        onMeasurementComplete(
-                                            height || depth || 0, // Depth
-                                            width,                // Width
-                                            area // Area
-                                        );
-
-                                        Alert.alert(
-                                            '✨ AI Analysis Complete',
-                                            `Detected:\nDepth/Length: ${height || depth || 0} cm\nWidth: ${width || 0} cm\nArea: ${area || 0} m²\nConfidence: ${(confidence || 0) * 100}%`
-                                        );
-                                        onClose();
+                                        if (result) {
+                                            const { width, height, depth, area, confidence } = result;
+                                            const d = height || depth || 0;
+                                            onMeasurementComplete(d, width, area);
+                                            Alert.alert('✨ AI Analysis', `Depth: ${d}cm\nWidth: ${width}cm\nArea: ${area}m²`);
+                                            onClose();
+                                        }
                                     } else {
-                                        Alert.alert('Error', 'Could not detect measurements.');
+                                        Alert.alert('Camera Error', 'Camera not active');
                                     }
-                                } else {
-                                    Alert.alert('Error', 'Camera view not ready');
+                                } catch (e: any) {
+                                    console.error('Capture Error:', e);
+                                    Alert.alert('Error', e.message);
                                 }
-                            } catch (error) {
-                                console.error('AI Detection Error:', error);
-                                Alert.alert('Error', 'Failed to analyze image: ' + (error as any).message);
-                            }
-                        }}
-                        style={[cstyles.modeToggleButton, { borderColor: colors.mediaAddButton }]}
-                    >
-                        <Text style={[styles.buttonText, { fontSize: 14 }]}>
-                            🤖 AI Detect
-                        </Text>
-                    </TouchableOpacity>
-                    <Text style={[styles.title, { fontSize: 20 }]}>
-                        Measure {mode === 'depth' ? 'Depth' : 'Width'}
-                    </Text>
+                            }}
+                            style={[cstyles.modeToggleButton, { borderColor: colors.mediaAddButton }]}
+                        >
+                            <Text style={[styles.buttonText, { fontSize: 12 }]}>🤖 AI</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Mode Toggle (Depth/Width) */}
+                    <View style={{ flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 20, marginHorizontal: 10 }}>
+                        <TouchableOpacity
+                            onPress={() => { handleReset(); setMode('depth'); }}
+                            style={[
+                                cstyles.modeToggleButton,
+                                {
+                                    backgroundColor: mode === 'depth' ? colors.buttonLoginBg : 'transparent',
+                                    borderWidth: 0,
+                                    margin: 2
+                                }
+                            ]}
+                        >
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>Depth</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            onPress={() => { handleReset(); setMode('width'); }}
+                            style={[
+                                cstyles.modeToggleButton,
+                                {
+                                    backgroundColor: mode === 'width' ? colors.buttonLoginBg : 'transparent',
+                                    borderWidth: 0,
+                                    margin: 2
+                                }
+                            ]}
+                        >
+                            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 12 }}>Width</Text>
+                        </TouchableOpacity>
+                    </View>
+
                     <TouchableOpacity onPress={handleCancel} style={cstyles.closeButton}>
                         <Text style={[styles.buttonText, { fontSize: 24 }]}>×</Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* AR Camera View */}
+                {/* Camera View */}
                 <View
                     ref={viewShotRef}
-                    collapsable={false}
                     style={cstyles.sceneContainer}
+                    onLayout={handleCameraLayout}
+                    collapsable={false} // Important for view shot
                 >
-                    <SceneformView
-                        displayPlanes={true}
-                        onSessionCreate={handleSessionCreate}
-                        onTapPlane={handleTapPlane}
-                        style={{
-                            flex: 1,
-                            width: '100%',
-                            height: '100%',
-                        }}
-                    />
+                    {device && cameraPermission ? (
+                        <TouchableOpacity
+                            activeOpacity={1}
+                            onPress={handleCameraPress}
+                            style={{ flex: 1 }}
+                        >
+                            <Camera
+                                ref={camera}
+                                style={StyleSheet.absoluteFill}
+                                device={device}
+                                isActive={cameraActive && visible}
+                                photo={true} // Enable photo capture
+                            />
 
-                    {/* Initialization Overlay - Temporarily disabled for debugging */}
-                    {/* {!sessionReady && (
+                            {/* Point markers */}
+                            {clickedPoints.map((point, index) => (
+                                <View
+                                    key={index}
+                                    style={[
+                                        cstyles.pointMarker,
+                                        {
+                                            left: point.x - 10,
+                                            top: point.y - 10,
+                                            backgroundColor: index === 0 ? '#00ff00' : '#00aaff',
+                                        },
+                                    ]}
+                                >
+                                    <Text style={cstyles.pointLabel}>{index + 1}</Text>
+                                </View>
+                            ))}
+
+                            {/* Distance line */}
+                            {clickedPoints.length === 2 && (
+                                <View
+                                    style={[
+                                        cstyles.distanceLine,
+                                        {
+                                            left: clickedPoints[0].x,
+                                            top: clickedPoints[0].y,
+                                            width: Math.sqrt(
+                                                Math.pow(clickedPoints[1].x - clickedPoints[0].x, 2) +
+                                                Math.pow(clickedPoints[1].y - clickedPoints[0].y, 2)
+                                            ),
+                                            transform: [
+                                                {
+                                                    rotate: `${Math.atan2(
+                                                        clickedPoints[1].y - clickedPoints[0].y,
+                                                        clickedPoints[1].x - clickedPoints[0].x
+                                                    )}rad`,
+                                                },
+                                            ],
+                                        },
+                                    ]}
+                                />
+                            )}
+
+                            {/* Live distance display */}
+                            {measuredDistance !== null && clickedPoints.length === 2 && (
+                                <View
+                                    style={[
+                                        cstyles.distanceLabel,
+                                        {
+                                            left: (clickedPoints[0].x + clickedPoints[1].x) / 2 - 50,
+                                            top: (clickedPoints[0].y + clickedPoints[1].y) / 2 - 20,
+                                        },
+                                    ]}
+                                >
+                                    <Text style={cstyles.distanceLabelText}>
+                                        {measuredDistance.toFixed(1)} cm
+                                    </Text>
+                                </View>
+                            )}
+
+                            {/* Crosshair */}
+                            <View style={cstyles.crosshair}>
+                                <View style={[cstyles.crosshairHorizontal, { backgroundColor: '#00aaff' }]} />
+                                <View style={[cstyles.crosshairVertical, { backgroundColor: '#00aaff' }]} />
+                            </View>
+
+                            {/* Distance indicator */}
+                            <View style={cstyles.distanceIndicator}>
+                                <Text style={cstyles.distanceIndicatorText}>
+                                    📏 {arDistanceToGround
+                                        ? `${arDistanceToGround.toFixed(2)}m (AR)`
+                                        : `${sensorDistance.toFixed(2)}m (sensor ~${tiltAngle.toFixed(0)}°)`}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    ) : (
                         <View style={cstyles.overlay}>
                             <Text style={[styles.subtitle, { color: '#fff', textAlign: 'center', fontSize: 18 }]}>
-                                📐 Initializing AR...
+                                {!cameraPermission ? '📷 Camera Permission Required' : '📷 Camera Loading...'}
                             </Text>
-                            <Text style={[styles.subtitle, { color: '#ccc', textAlign: 'center', marginTop: 10, fontSize: 14 }]}>
-                                Point camera at the ground and move slowly
-                            </Text>
-                            <Text style={[styles.subtitle, { color: '#888', textAlign: 'center', marginTop: 10, fontSize: 12 }]}>
-                                {initializationTime}s elapsed
-                            </Text>
-                        </View>
-                    )} */}
-
-                    {/* Crosshair for aiming */}
-                    {sessionReady && (
-                        <View style={cstyles.crosshair}>
-                            <View style={[cstyles.crosshairHorizontal, { backgroundColor: mode === 'depth' ? '#00ff00' : '#00aaff' }]} />
-                            <View style={[cstyles.crosshairVertical, { backgroundColor: mode === 'depth' ? '#00ff00' : '#00aaff' }]} />
                         </View>
                     )}
-
-                    {/* Visual pin markers for AR taps */}
-                    {arTapPoints.map((point, index) => (
-                        <View
-                            key={index}
-                            style={[
-                                cstyles.pointMarker,
-                                {
-                                    left: point.x - 10,
-                                    top: point.y - 10,
-                                    backgroundColor: index === 0 ? '#00ff00' : '#00aaff',
-                                },
-                            ]}
-                        >
-                            <Text style={cstyles.pointLabel}>{index + 1}</Text>
-                        </View>
-                    ))}
                 </View>
 
                 {/* Instructions */}
                 <View style={cstyles.instructions}>
                     <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 10, fontSize: 16 }]}>
-                        {getMeasurementInstruction()}
+                        {clickedPoints.length === 0
+                            ? '📍 Tap FIRST point on screen'
+                            : clickedPoints.length === 1
+                                ? '📍 Tap SECOND point on screen'
+                                : measuredDistance !== null
+                                    ? `✅ Distance: ${measuredDistance.toFixed(1)} cm`
+                                    : 'Calculating...'}
                     </Text>
                 </View>
-
-                {/* Mode Toggle Removed as requested - using unified pin mode */}
-                {/* 
-                <View style={cstyles.modeToggle}>
-                   ... removed ...
-                </View> 
-                */}
 
                 {/* Controls */}
                 <View style={cstyles.controls}>
@@ -807,15 +754,19 @@ export default function DepthMeasurement({
                                 width: width * 0.4,
                             },
                         ]}
-                        onPress={handleReset}
-                        disabled={!sessionReady}
+                        onPress={() => {
+                            setClickedPoints([]);
+                            setMeasuredDistance(null);
+                            setDepth(null);
+                            setWidthValue(null);
+                        }}
                     >
                         <Text style={[styles.buttonText, { fontSize: 16 }]}>
                             Reset
                         </Text>
                     </TouchableOpacity>
 
-                    {(depth !== null || widthValue !== null) && (
+                    {measuredDistance !== null && (
                         <TouchableOpacity
                             style={[
                                 styles.simpleButton,

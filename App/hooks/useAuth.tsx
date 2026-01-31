@@ -42,8 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkUserStatus = async () => {
       try {
-        const savedUser = await loadUser();
-        setUser(savedUser);
+        // Automatically set a mock user to bypass login for new flow
+        const mockUser = { id: '1', name: 'Citizen', token: 'mock-token', email: 'user@civic.com' };
+        setUser(mockUser);
       } finally {
         setLoading(false);
       }

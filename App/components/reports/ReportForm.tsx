@@ -52,12 +52,13 @@ export default function ReportForm({
         placeholderTextColor={colors.PlaceholderText}
       />
       <TextInput
-        style={[styles.input, { height: 100 }]}
+        style={[styles.input, { height: 60 }]}
         placeholder="Enter Description"
         value={description}
         onChangeText={setDescription}
         placeholderTextColor={colors.PlaceholderText}
         multiline
+        numberOfLines={3}
       />
       <LocationPicker
         location={location}

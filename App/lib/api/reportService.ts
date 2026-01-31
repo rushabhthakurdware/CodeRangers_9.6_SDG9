@@ -10,39 +10,42 @@ export async function createReport(
     status?: "submitted" | "in-progress" | "resolved",
 ): Promise<Report | null> {
     try {
-        const formData = new FormData();
+        // Map to strict backend input requirements
+        const payload = {
+            location: {
+                lat: location.lat,
+                lon: location.lng
+            },
+            asset: {
+                type: category || "road",
+                geometry: {
+                    area_m2: 1.0 // Default or estimated
+                }
+            },
+            description: description,
+            title: title,
+            // Additional fields expected by analyze-complete
+            severity_override: "moderate"
+        };
 
-        // Append text fields
-        formData.append("title", title);
-        formData.append("description", description);
-        if (category) {
-            formData.append("category", category);
-        }
+        const res = await apiClient.post("/analyze-complete", payload);
 
-        // Append location as separate fields
-        if (location) {
-            formData.append("location[lat]", location.lat.toString());
-            formData.append("location[lng]", location.lng.toString());
-            //address not implimented
-        }
+        console.log("Report submitted successfully:", res.data);
 
-        // Append media file if it exists
-        if (mediaList && mediaList.length > 0) {
-            mediaList.forEach(mediaItem => {
-                formData.append('media', {
-                    uri: mediaItem.uri, // `uri` is the local file path
-                    name: mediaItem.name, // The filename
-                    type: mediaItem.type === 'image' ? 'image/jpeg' : 'video/mp4', // The MIME type
-                } as any);
-            });
-        }
-
-        const res = await apiClient.post("/reports", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-        });
-
-        console.log("Report submitted successfully:", res.data.data);
-        return res.data.data;
+        // Return a mock Report object since the backend returns a different structure
+        return {
+            _id: res.data.issue_id,
+            title: title,
+            description: description,
+            location: location,
+            category: category,
+            media: [],
+            createdBy: { _id: "user", name: "User", email: "", role: "citizen" },
+            createdByName: "User",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            status: "submitted"
+        };
     } catch (error: any) {
         console.error("Error creating report:", error.response?.data || error.message);
         return null;
@@ -51,38 +54,45 @@ export async function createReport(
 
 export async function getReports(category?: string, status?: string): Promise<Report[]> {
     try {
-        const res = await apiClient.get("/reports", { params: { category, status } });
-        console.log("report got", res.data.data[0]);
-        return res.data.data;
+        const res = await apiClient.get("/data");
+        console.log("Decision data fetched:", res.data.count);
+
+        // Map 'decision_outputs' to 'Report' type
+        const reports: Report[] = res.data.data.map((item: any, index: number) => ({
+            _id: item.id?.toString() || index.toString(),
+            title: `Priority ${item.priority_level}`,
+            description: item.explanation || "No details provided",
+            category: "pothole", // Defaulting as category isn't in decision_outputs
+            location: {
+                lat: 0, // Location not returned in /data endpoint
+                lng: 0
+            },
+            media: [],
+            status: item.selected_for_repair ? "in-progress" : "submitted",
+            createdAt: item.computed_at || new Date().toISOString(),
+            updatedAt: item.computed_at || new Date().toISOString(),
+            createdByName: "System",
+            createdBy: { _id: "sys", name: "System", email: "", role: "admin" }
+        }));
+
+        return reports;
     } catch (error: any) {
         console.error("Error fetching reports:", error.response?.data || error.message);
         return [];
     }
 }
+
 /*not workig?? */
 export async function getReportById(reportId: string): Promise<Report[]> {
-    try {
-        const res = await apiClient.get(`/reports/${reportId}`);
-        return res.data.data;
-    } catch (error: any) {
-        console.error(`Error fetching report with ID ${reportId}:`, error.response?.data || error.message);
-        throw new Error("Failed to fetch the specified report.");
-        return [];
-    }
+    // Not implemented in new backend
+    return [];
 }
 
 // ... getMyReports, updateReportStatus, editMyReport functions updated similarly
 
 export async function getMyReports(): Promise<Report[]> {
-    try {
-        // ✅ Uses the central apiClient directly
-        const res = await apiClient.get("/reports/my");
-        // console.log("report got my", res.data.data[0]);
-        return res.data.data;
-    } catch (error: any) {
-        console.error("Error fetching my reports:", error.response?.data || error.message);
-        return [];
-    }
+    // Alias to getReports for now
+    return getReports();
 }
 
 /**

@@ -16,7 +16,11 @@ import { LanguageProvider } from "@/context/LanguageContext";
 import ServerConfigModal from "@/components/debug/ServerConfigModal";
 import { setApiBaseUrl } from "@/lib/api/apiClient";
 import { useEffect, useState } from "react";
-import { loadServerIp, saveServerIp } from "@/lib/storage/serverStorage";
+// import { loadServerIp, saveServerIp } from "@/lib/storage/serverStorage";
+
+// Force correct URL on startup
+const SERVER_URL = "https://unreverent-jonelle-unvehemently.ngrok-free.dev";
+setApiBaseUrl(SERVER_URL);
 import AppInitializer from "@/components/debug/DebugIpInit";
 import { useStylePalette } from "@/constants/StylePalette";
 import { useTheme } from "@/hooks/useTheme";
@@ -46,11 +50,13 @@ function Root() {
   // This is no longer needed here as the group layouts handle redirection.
   // We use Stack.Screen to define the available routes.
 
+  // Direct access to tabs, bypassing auth
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false }} initialRouteName="(tabs)">
+      <Stack.Screen name="(tabs)" />
+      {/* Kept specifically if needed, but main flow is tabs */}
       <Stack.Screen name="(public)" />
       <Stack.Screen name="(auth)" />
-      <Stack.Screen name="(tabs)" />
     </Stack>
   );
 }

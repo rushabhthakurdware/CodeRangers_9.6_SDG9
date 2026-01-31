@@ -7,9 +7,8 @@ import {
     Alert,
     ActivityIndicator,
     Modal,
-    Image,
 } from 'react-native';
-import { Camera, CameraType } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera'; // Updated Import
 import { useTheme } from '@/hooks/useTheme';
 import { useStylePalette } from '@/constants/StylePalette';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,28 +33,62 @@ export default function PotholeDetection({
     const { colors } = useTheme();
     const styles = useStylePalette();
 
-    const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+    const [permission, requestPermission] = useCameraPermissions(); // Updated Hook
     const [isDetecting, setIsDetecting] = useState(false);
     const [detections, setDetections] = useState<Detection[]>([]);
     const [modelLoaded, setModelLoaded] = useState(false);
-    const cameraRef = useRef<Camera>(null);
 
+    // CameraView Ref
+    const cameraRef = useRef<CameraView>(null);
+
+    // Initial Permission Request
     useEffect(() => {
-        (async () => {
-            const { status } = await Camera.requestCameraPermissionsAsync();
-            setHasPermission(status === 'granted');
-        })();
-    }, []);
+        if (!permission) {
+            requestPermission();
+        }
+    }, [permission]);
 
+    // Cleanup when closing
+    useEffect(() => {
+        if (!visible) {
+            setIsDetecting(false);
+            setDetections([]);
+        }
+    }, [visible]);
+
+    // Simulate Model Loading
     useEffect(() => {
         if (visible) {
-            // Simulate model loading
             setTimeout(() => {
                 setModelLoaded(true);
                 console.log('✅ YOLO model loaded (simulated)');
             }, 1000);
         }
     }, [visible]);
+
+    if (!permission) {
+        // Camera permissions are still loading.
+        return <View />;
+    }
+
+    if (!permission.granted) {
+        // Camera permissions are not granted yet.
+        return (
+            <Modal visible={visible} animationType="slide">
+                <View style={cstyles.container}>
+                    <Text style={[styles.title, { color: '#fff', textAlign: 'center', marginTop: 100 }]}>
+                        We need your permission to show the camera
+                    </Text>
+                    <TouchableOpacity style={styles.simpleButton} onPress={requestPermission}>
+                        <Text style={styles.buttonText}>Grant Permission</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.simpleButton, { marginTop: 20, backgroundColor: '#333' }]} onPress={onClose}>
+                        <Text style={styles.buttonText}>Close</Text>
+                    </TouchableOpacity>
+                </View>
+            </Modal>
+        );
+    }
 
     const detectPothole = async () => {
         if (!cameraRef.current || !modelLoaded) {
@@ -66,13 +99,15 @@ export default function PotholeDetection({
         setIsDetecting(true);
 
         try {
-            // Capture image
+            // Updated: takePictureAsync options
             const photo = await cameraRef.current.takePictureAsync({
                 quality: 0.8,
                 base64: false,
             });
 
-            console.log('📸 Image captured for detection');
+            if (!photo) throw new Error("Failed to take picture");
+
+            console.log('📸 Image captured for detection', photo.uri);
 
             // TODO: Run TFLite inference here
             // For now, simulate detection with 80% chance of finding pothole
@@ -124,25 +159,6 @@ export default function PotholeDetection({
         }
     };
 
-    if (hasPermission === null) {
-        return <View />;
-    }
-
-    if (hasPermission === false) {
-        return (
-            <Modal visible={visible} animationType="slide">
-                <View style={cstyles.container}>
-                    <Text style={[styles.title, { color: colors.text }]}>
-                        Camera permission required
-                    </Text>
-                    <TouchableOpacity style={styles.simpleButton} onPress={onClose}>
-                        <Text style={styles.buttonText}>Close</Text>
-                    </TouchableOpacity>
-                </View>
-            </Modal>
-        );
-    }
-
     return (
         <Modal visible={visible} animationType="slide">
             <View style={cstyles.container}>
@@ -158,10 +174,10 @@ export default function PotholeDetection({
 
                 {/* Camera View */}
                 <View style={cstyles.cameraContainer}>
-                    <Camera
+                    <CameraView
                         ref={cameraRef}
                         style={cstyles.camera}
-                        type={CameraType.back}
+                        facing="back" // Updated: type prop is now facing
                     >
                         {/* Model Status Overlay */}
                         {!modelLoaded && (
@@ -206,7 +222,7 @@ export default function PotholeDetection({
                                 </Text>
                             </View>
                         )}
-                    </Camera>
+                    </CameraView>
                 </View>
 
                 {/* Controls */}
@@ -215,7 +231,7 @@ export default function PotholeDetection({
                         style={[
                             styles.simpleButton,
                             {
-                                backgroundColor: modelLoaded ? colors.primary : '#666',
+                                backgroundColor: modelLoaded ? colors.buttonLoginBg : '#666', // Fixed color
                                 paddingVertical: 16,
                                 opacity: isDetecting ? 0.6 : 1,
                             }
