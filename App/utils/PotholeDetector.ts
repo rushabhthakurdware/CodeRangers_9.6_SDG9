@@ -4,8 +4,8 @@ import { Worklets } from 'react-native-worklets-core';
  * Pothole Detection Configuration
  */
 export const DETECTION_CONFIG = {
-    // Processing interval in milliseconds (0.5 seconds as requested)
-    PROCESSING_INTERVAL: 500,
+    // Processing interval in milliseconds (1 second as requested)
+    PROCESSING_INTERVAL: 1000,
 
     // Contour filtering parameters
     MIN_AREA: 500,        // Minimum area in pixels²
